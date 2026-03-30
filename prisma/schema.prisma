@@ -1,0 +1,361 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── MULTI-TENANCY ───
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  clients   Client[]
+  partners  Partner[]
+  users     User[]
+}
+
+model Client {
+  id             String       @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id])
+  name           String
+  fullName       String
+  fmCompany      String?
+  fmContactName  String?
+  fmContactEmail String?
+  fmContactPhone String?
+  acctDirector   String?
+  customerKey    String       @unique
+  logoUrl        String?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  locations      Location[]
+  assets         Asset[]
+  workOrders     WorkOrder[]
+  users          ClientUser[]
+  config         ClientConfig?
+}
+
+model ClientConfig {
+  id                     String  @id @default(cuid())
+  clientId               String  @unique
+  client                 Client  @relation(fields: [clientId], references: [id])
+  isRequestEnabled       Boolean @default(true)
+  isRequestClassEnabled  Boolean @default(true)
+  isBillingEnabled       Boolean @default(true)
+  isNotificationsEnabled Boolean @default(true)
+  isBudgetEnabled        Boolean @default(false)
+  isApprovalRequired     Boolean @default(true)
+  showPictures           Boolean @default(true)
+  showPicturesAsIcons    Boolean @default(false)
+  imageSize              Int     @default(35)
+  useTagNumber           Boolean @default(true)
+  showZeroQuantities     Boolean @default(true)
+  rowsPerPage            Int     @default(100)
+  allowMultipleRequests  Boolean @default(false)
+  labelOverrides         Json?
+}
+
+// ─── LOCATIONS ───
+
+model Location {
+  id             String       @id @default(cuid())
+  clientId       String
+  client         Client       @relation(fields: [clientId], references: [id])
+  partnerId      String?
+  partner        Partner?     @relation(fields: [partnerId], references: [id])
+  name           String
+  address        String?
+  city           String
+  state          String
+  zip            String?
+  lat            Float?
+  lng            Float?
+  locationType   LocationType @default(PRIMARY)
+  code           String
+  capacity       Int?
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  assets         Asset[]
+  facilities     Facility[]
+  workOrdersFrom WorkOrder[]  @relation("FromLocation")
+  workOrdersTo   WorkOrder[]  @relation("ToLocation")
+}
+
+enum LocationType {
+  PRIMARY
+  BRANCH
+  WAREHOUSE
+  PARTNER_WH
+}
+
+model Facility {
+  id         String   @id @default(cuid())
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+  name       String
+  type       String?
+  floor      String?
+  building   String?
+  isActive   Boolean  @default(true)
+}
+
+// ─── PARTNER NETWORK ───
+
+model Partner {
+  id              String       @id @default(cuid())
+  orgId           String
+  org             Organization @relation(fields: [orgId], references: [id])
+  name            String
+  region          String
+  states          String[]
+  contactName     String?
+  contactEmail    String?
+  contactPhone    String?
+  warehouseSystem String       @default("Windfall/MoveHQ")
+  apiEndpoint     String?
+  apiKey          String?
+  slaTarget       Float        @default(98.0)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  locations       Location[]
+  workOrders      WorkOrder[]
+}
+
+// ─── ASSET INVENTORY ───
+
+model Asset {
+  id                String         @id @default(cuid())
+  clientId          String
+  client            Client         @relation(fields: [clientId], references: [id])
+  locationId        String
+  location          Location       @relation(fields: [locationId], references: [id])
+  tagNumber         String
+  serialNumber      String?
+  systemNumber      String?
+  description       String
+  type              String
+  category          String
+  manufacturer      String?
+  partNumber        String?
+  modelNumber       String?
+  width             Float?
+  height            Float?
+  depth             Float?
+  primaryMaterial   String?
+  primaryColor      String?
+  secondaryMaterial String?
+  secondaryColor    String?
+  attributes        Json?
+  originalCost      Float?
+  currentValue      Float?
+  costCenter        String?
+  quantity          Int            @default(1)
+  condition         AssetCondition @default(GOOD)
+  status            AssetStatus    @default(IN_STORAGE)
+  photos            AssetPhoto[]
+  dateReceived      DateTime?
+  lastAuditDate     DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  workOrderItems    WorkOrderItem[]
+
+  @@index([clientId, tagNumber])
+  @@index([clientId, status])
+  @@index([locationId])
+  @@index([type])
+  @@index([category])
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum AssetStatus {
+  IN_STORAGE
+  DEPLOYED
+  AVAILABLE
+  RESERVED
+  IN_TRANSIT
+  DECOMMISSIONED
+}
+
+model AssetPhoto {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id])
+  url       String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ─── WORK ORDERS ───
+
+model WorkOrder {
+  id               String          @id @default(cuid())
+  clientId         String
+  client           Client          @relation(fields: [clientId], references: [id])
+  partnerId        String?
+  partner          Partner?        @relation(fields: [partnerId], references: [id])
+  fromLocationId   String?
+  fromLocation     Location?       @relation("FromLocation", fields: [fromLocationId], references: [id])
+  toLocationId     String?
+  toLocation       Location?       @relation("ToLocation", fields: [toLocationId], references: [id])
+  orderNumber      String          @unique
+  sequenceNum      Int
+  requestType      String
+  requestCategory  String?
+  priority         Priority        @default(MEDIUM)
+  status           WorkOrderStatus @default(DRAFT)
+  requestedBy      String
+  requestedByEmail String?
+  onsiteContact    String?
+  onsitePhone      String?
+  createdById      String
+  createdBy        User            @relation(fields: [createdById], references: [id])
+  jobName          String?
+  description      String?
+  fromDetail       String?
+  toDetail         String?
+  poNumber         String?         @db.VarChar(35)
+  costCenter       String?         @db.VarChar(35)
+  department       String?         @db.VarChar(35)
+  glCode           String?         @db.VarChar(35)
+  chargeBack       String?         @db.VarChar(35)
+  workOrderRef     String?         @db.VarChar(35)
+  requestDate      DateTime        @default(now())
+  scheduledDate    DateTime?
+  completedDate    DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  items            WorkOrderItem[]
+  logs             ActivityLog[]
+  attachments      Attachment[]
+  notifications    Notification[]
+
+  @@index([clientId, status])
+  @@index([partnerId])
+  @@index([orderNumber])
+}
+
+enum WorkOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model WorkOrderItem {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  assetId     String
+  asset       Asset     @relation(fields: [assetId], references: [id])
+  quantity    Int       @default(1)
+  notes       String?
+}
+
+// ─── ACTIVITY & AUDIT ───
+
+model ActivityLog {
+  id          String     @id @default(cuid())
+  workOrderId String?
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id])
+  type        LogType
+  title       String
+  text        String?
+  isPublic    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+}
+
+enum LogType {
+  ACTIVITY
+  COMMENT
+  STATUS_CHANGE
+  ASSIGNMENT
+  ATTACHMENT
+}
+
+model Attachment {
+  id           String    @id @default(cuid())
+  workOrderId  String
+  workOrder    WorkOrder @relation(fields: [workOrderId], references: [id])
+  fileName     String
+  fileUrl      String
+  fileSize     Int?
+  mimeType     String?
+  uploadedById String
+  uploadedBy   User      @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  email       String
+  isActive    Boolean   @default(true)
+}
+
+// ─── USERS & AUTH ───
+
+model User {
+  id          String        @id @default(cuid())
+  orgId       String?
+  org         Organization? @relation(fields: [orgId], references: [id])
+  email       String        @unique
+  name        String
+  role        UserRole
+  avatarUrl   String?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  workOrders  WorkOrder[]
+  logs        ActivityLog[]
+  attachments Attachment[]
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  PARTNER_ADMIN
+  PARTNER_USER
+  CLIENT_ADMIN
+  CLIENT_USER
+  FM_ADMIN
+  FM_USER
+  APPROVER
+  VIEWER
+}
+
+model ClientUser {
+  id       String @id @default(cuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id])
+  userId   String
+  role     String
+  class    String?
+
+  @@unique([clientId, userId])
+}
