@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Search, Download, X, Image as ImageIcon, Maximize2 } from "lucide-react"
+import * as XLSX from "xlsx"
 
 export default function InventoryPage() {
   const [page, setPage] = useState(1)
@@ -137,12 +138,55 @@ export default function InventoryPage() {
             </Button>
           )}
 
-          <Button variant="outline" size="sm" className="text-xs">
+          <Button variant="outline" size="sm" className="text-xs" onClick={() => {
+            if (!assets.data?.items.length) return
+            const rows = assets.data.items.map((a) => ({
+              "Tag #": a.tagNumber,
+              "Description": a.description,
+              "Type": a.type,
+              "Category": a.category,
+              "Qty": a.quantity,
+              "Manufacturer": a.manufacturer || "",
+              "W": a.width || "",
+              "H": a.height || "",
+              "D": a.depth || "",
+              "Material": a.primaryMaterial || "",
+              "Color": a.primaryColor || "",
+              "Location": `${a.location.city}, ${a.location.state}`,
+              "Partner": a.location.partner?.name || "",
+              "Condition": a.condition,
+              "Status": a.status.replace(/_/g, " "),
+              "Value": a.currentValue || 0,
+            }))
+            const ws = XLSX.utils.json_to_sheet(rows)
+            const wb = XLSX.utils.book_new()
+            XLSX.utils.book_append_sheet(wb, ws, "Assets")
+            XLSX.writeFile(wb, `corovan-assets-export-${new Date().toISOString().slice(0,10)}.xlsx`)
+          }}>
             <Download className="h-3.5 w-3.5 mr-1" />
             Export
           </Button>
         </div>
       </div>
+
+      {/* Active filter summary */}
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 text-xs flex-wrap">
+          <span className="text-muted-foreground font-medium">Filtered by:</span>
+          {search && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5">
+              Search: &quot;{search}&quot;
+              <button onClick={() => { setSearch(""); setSearchInput("") }}><X className="h-3 w-3" /></button>
+            </span>
+          )}
+          {Object.entries(filters).filter(([, v]) => v.length > 0).map(([key, values]) => (
+            <span key={key} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5">
+              {key}: {values.length > 2 ? `${values.length} selected` : values.join(", ")}
+              <button onClick={() => handleFilterChange(key, [])}><X className="h-3 w-3" /></button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Grid */}
       <AssetGrid

@@ -13,6 +13,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Building2,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -33,32 +34,51 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r bg-sidebar transition-all duration-200",
+        "flex flex-col border-r bg-gradient-to-b from-gray-900 to-gray-950 text-white transition-all duration-200",
         collapsed ? "w-16" : "w-60"
       )}
     >
       {/* Logo */}
-      <div className="flex h-14 items-center border-b px-4">
+      <div className="flex h-14 items-center border-b border-white/10 px-4">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ea580c] text-white font-bold text-sm">
               C
             </div>
             <div>
-              <div className="font-semibold text-sm">Corovan</div>
-              <div className="text-[10px] text-muted-foreground">Asset Platform</div>
+              <div className="font-semibold text-sm text-white">Corovan</div>
+              <div className="text-[10px] text-gray-400">Asset Platform</div>
             </div>
           </div>
         )}
         {collapsed && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm mx-auto">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ea580c] text-white font-bold text-sm mx-auto">
             C
           </div>
         )}
       </div>
 
+      {/* Client Context */}
+      {!collapsed && (
+        <div className="mx-3 mt-3 rounded-lg bg-white/5 border border-white/10 p-2.5">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-blue-500/20 text-blue-300 text-[10px] font-bold">
+              AAA
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-gray-200 truncate">AAA Insurance</div>
+              <div className="text-[10px] text-gray-400 truncate">Cushman & Wakefield</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 mt-1.5 text-[9px] text-gray-500">
+            <Building2 className="h-2.5 w-2.5" />
+            <span>CA + TX + MO + AZ + NV + CO</span>
+          </div>
+        </div>
+      )}
+
       {/* Nav */}
-      <nav className="flex-1 space-y-1 p-2">
+      <nav className="flex-1 space-y-0.5 p-2 mt-2">
         {navigation.map((item) => {
           const isActive = pathname.startsWith(item.href)
           return (
@@ -68,8 +88,8 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  ? "bg-[#ea580c] text-white"
+                  : "text-gray-400 hover:bg-white/5 hover:text-white",
                 collapsed && "justify-center px-2"
               )}
               title={collapsed ? item.name : undefined}
@@ -82,10 +102,10 @@ export function Sidebar() {
       </nav>
 
       {/* Collapse toggle */}
-      <div className="border-t p-2">
+      <div className="border-t border-white/10 p-2">
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="flex w-full items-center justify-center rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          className="flex w-full items-center justify-center rounded-md p-2 text-gray-500 hover:bg-white/5 hover:text-gray-300 transition-colors"
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>

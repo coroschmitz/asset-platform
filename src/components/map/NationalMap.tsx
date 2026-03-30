@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
+import { cn } from "@/lib/utils"
 
 interface LocationPoint {
   id: string
@@ -16,112 +17,176 @@ interface LocationPoint {
 }
 
 export function NationalMap({ locations }: { locations: LocationPoint[] }) {
-  const mapContainer = useRef<HTMLDivElement>(null)
-  const [mapLoaded, setMapLoaded] = useState(false)
-  const mapRef = useRef<any>(null)
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    if (!token || !mapContainer.current || mapRef.current) return
+    setMounted(true)
+  }, [])
 
-    let cancelled = false
+  if (!mounted) {
+    return <MapPlaceholder locations={locations} />
+  }
 
-    import("mapbox-gl").then((mapboxgl) => {
-      if (cancelled || !mapContainer.current) return
+  return <LeafletMap locations={locations} />
+}
 
-      mapboxgl.default.accessToken = token
+function LeafletMap({ locations }: { locations: LocationPoint[] }) {
+  const [leafletLoaded, setLeafletLoaded] = useState(false)
+  const [components, setComponents] = useState<any>(null)
 
-      const map = new mapboxgl.default.Map({
-        container: mapContainer.current,
-        style: "mapbox://styles/mapbox/light-v11",
-        center: [-98.5, 38.5],
-        zoom: 3.5,
-      })
+  useEffect(() => {
+    // Dynamic import to avoid SSR issues
+    Promise.all([
+      import("react-leaflet"),
+      import("leaflet/dist/leaflet.css"),
+      import("leaflet"),
+    ]).then(([rl, , L]) => {
+      setComponents({ rl, L: L.default || L })
+      setLeafletLoaded(true)
+    }).catch(() => {
+      // Fallback silently
+    })
+  }, [])
 
-      map.on("load", () => {
-        setMapLoaded(true)
-        mapRef.current = map
+  if (!leafletLoaded || !components) {
+    return <MapPlaceholder locations={locations} />
+  }
 
-        for (const loc of locations) {
+  const { rl, L } = components
+  const { MapContainer, TileLayer, CircleMarker, Popup } = rl
+
+  return (
+    <div className="relative">
+      <MapContainer
+        center={[39.0, -98.0]}
+        zoom={4}
+        scrollWheelZoom={true}
+        style={{ height: "420px", width: "100%", borderRadius: "0.5rem" }}
+        zoomControl={true}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {locations.map((loc) => {
           const isCorovan = loc.partnerName.includes("Corovan")
           const isPrimary = loc.type === "PRIMARY"
-          const size = isPrimary ? 12 : 6
+          const radius = isPrimary ? 8 : 4
+          const color = isCorovan ? "#ea580c" : "#7c3aed"
+          const utilization = loc.capacity ? Math.round((loc.assetCount / loc.capacity) * 100) : null
 
-          const el = document.createElement("div")
-          el.style.width = `${size}px`
-          el.style.height = `${size}px`
-          el.style.borderRadius = "50%"
-          el.style.backgroundColor = isCorovan ? "#ea580c" : "#7c3aed"
-          el.style.border = "2px solid white"
-          el.style.boxShadow = "0 1px 3px rgba(0,0,0,0.3)"
-          el.style.cursor = "pointer"
+          return (
+            <CircleMarker
+              key={loc.id}
+              center={[loc.lat, loc.lng]}
+              radius={radius}
+              pathOptions={{
+                color: "white",
+                weight: isPrimary ? 2 : 1,
+                fillColor: color,
+                fillOpacity: isPrimary ? 0.9 : 0.7,
+              }}
+            >
+              <Popup>
+                <div style={{ fontFamily: "sans-serif", fontSize: "12px", lineHeight: "1.5", minWidth: "160px" }}>
+                  <div style={{ fontWeight: 700, fontSize: "13px", marginBottom: "4px" }}>{loc.name}</div>
+                  <div style={{ color: "#555" }}>{loc.city}, {loc.state}</div>
+                  <div style={{ marginTop: "6px", borderTop: "1px solid #eee", paddingTop: "6px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#888" }}>Partner</span>
+                      <span style={{ fontWeight: 500 }}>{loc.partnerName}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "#888" }}>Assets</span>
+                      <span style={{ fontWeight: 500 }}>{loc.assetCount.toLocaleString()}</span>
+                    </div>
+                    {utilization !== null && (
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: "#888" }}>Utilization</span>
+                        <span style={{ fontWeight: 500, color: utilization > 85 ? "#dc2626" : utilization > 65 ? "#d97706" : "#059669" }}>
+                          {utilization}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ marginTop: "4px" }}>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        fontSize: "10px",
+                        padding: "1px 6px",
+                        borderRadius: "9999px",
+                        backgroundColor: isCorovan ? "#fff7ed" : "#f5f3ff",
+                        color: isCorovan ? "#ea580c" : "#7c3aed",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {isCorovan ? "Corovan Direct" : "Partner Network"}
+                    </span>
+                  </div>
+                </div>
+              </Popup>
+            </CircleMarker>
+          )
+        })}
+      </MapContainer>
 
-          const popup = new mapboxgl.default.Popup({ offset: 10 }).setHTML(`
-            <div style="font-family: sans-serif; font-size: 12px; line-height: 1.4;">
-              <strong>${loc.name}</strong><br/>
-              ${loc.city}, ${loc.state}<br/>
-              <span style="color: #666;">Partner: ${loc.partnerName}</span><br/>
-              <span style="color: #666;">Assets: ${loc.assetCount}</span>
-              ${loc.capacity ? `<br/><span style="color: #666;">Capacity: ${Math.round((loc.assetCount / loc.capacity) * 100)}%</span>` : ""}
-            </div>
-          `)
-
-          new mapboxgl.default.Marker(el)
-            .setLngLat([loc.lng, loc.lat])
-            .setPopup(popup)
-            .addTo(map)
-        }
-      })
-
-      map.addControl(new mapboxgl.default.NavigationControl(), "top-right")
-    })
-
-    return () => {
-      cancelled = true
-      mapRef.current?.remove()
-      mapRef.current = null
-    }
-  }, [token, locations])
-
-  if (!token) {
-    return (
-      <div className="relative h-80 rounded-lg bg-gradient-to-br from-blue-50 to-green-50 border overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center space-y-3">
-            <div className="text-sm font-medium text-muted-foreground">Map Preview</div>
-            <div className="text-xs text-muted-foreground">Set NEXT_PUBLIC_MAPBOX_TOKEN to enable interactive map</div>
-            <div className="flex flex-wrap gap-2 justify-center max-w-md">
-              {locations.slice(0, 12).map((loc) => (
-                <span
-                  key={loc.id}
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] border"
-                >
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ backgroundColor: loc.partnerName.includes("Corovan") ? "#ea580c" : "#7c3aed" }}
-                  />
-                  {loc.city}, {loc.state} ({loc.assetCount})
-                </span>
-              ))}
-              {locations.length > 12 && (
-                <span className="text-[10px] text-muted-foreground">+{locations.length - 12} more</span>
-              )}
-            </div>
-            <div className="flex gap-4 justify-center text-[10px]">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-[#ea580c]" /> Corovan Direct
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-[#7c3aed]" /> Partner Network
-              </span>
-            </div>
+      {/* Legend */}
+      <div className="absolute bottom-4 left-4 z-[1000] rounded-lg bg-white/95 backdrop-blur-sm border shadow-sm px-3 py-2">
+        <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Coverage</div>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="h-3 w-3 rounded-full bg-[#ea580c] border border-white shadow-sm" />
+            <span>Corovan Direct (CA)</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="h-3 w-3 rounded-full bg-[#7c3aed] border border-white shadow-sm" />
+            <span>Partner Network</span>
           </div>
         </div>
+        <div className="flex items-center gap-2 mt-1.5 pt-1.5 border-t text-[10px] text-muted-foreground">
+          <span className="h-2 w-2 rounded-full bg-gray-400" />
+          <span>Larger = Primary Office</span>
+        </div>
       </div>
-    )
+
+      {/* Stats overlay */}
+      <div className="absolute top-4 right-4 z-[1000] rounded-lg bg-white/95 backdrop-blur-sm border shadow-sm px-3 py-2 text-xs">
+        <div className="font-semibold">{locations.length} Locations</div>
+        <div className="text-muted-foreground">
+          {locations.filter((l) => l.type === "PRIMARY").length} Primary &middot;{" "}
+          {locations.filter((l) => l.type === "BRANCH").length} Branches
+        </div>
+        <div className="text-muted-foreground">
+          {new Set(locations.map((l) => l.state)).size} States
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MapPlaceholder({ locations }: { locations: LocationPoint[] }) {
+  const stateGroups: Record<string, { count: number; assets: number }> = {}
+  for (const loc of locations) {
+    if (!stateGroups[loc.state]) stateGroups[loc.state] = { count: 0, assets: 0 }
+    stateGroups[loc.state].count++
+    stateGroups[loc.state].assets += loc.assetCount
   }
 
   return (
-    <div ref={mapContainer} className="h-80 rounded-lg overflow-hidden" />
+    <div className="relative h-[420px] rounded-lg bg-gradient-to-br from-slate-50 to-blue-50 border overflow-hidden flex items-center justify-center">
+      <div className="text-center space-y-3 p-6">
+        <div className="text-sm font-medium">Loading Map...</div>
+        <div className="grid grid-cols-3 gap-3">
+          {Object.entries(stateGroups).sort((a, b) => b[1].assets - a[1].assets).map(([state, data]) => (
+            <div key={state} className="text-left rounded-md border bg-white p-2">
+              <div className="font-bold text-sm">{state}</div>
+              <div className="text-[10px] text-muted-foreground">{data.count} locations</div>
+              <div className="text-[10px] text-muted-foreground">{data.assets.toLocaleString()} assets</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }

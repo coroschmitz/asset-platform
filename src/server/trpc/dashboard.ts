@@ -3,7 +3,7 @@ import { z } from "zod/v4"
 
 export const dashboardRouter = router({
   getStats: publicProcedure.query(async ({ ctx }) => {
-    const [totalAssets, totalValue, activeWorkOrders, locationCount, partnerCount] = await Promise.all([
+    const [totalAssets, totalValue, activeWorkOrders, locationCount, partnerCount, stateCount] = await Promise.all([
       ctx.prisma.asset.count(),
       ctx.prisma.asset.aggregate({ _sum: { currentValue: true } }),
       ctx.prisma.workOrder.count({
@@ -11,6 +11,7 @@ export const dashboardRouter = router({
       }),
       ctx.prisma.location.count({ where: { isActive: true } }),
       ctx.prisma.partner.count({ where: { isActive: true } }),
+      ctx.prisma.location.findMany({ distinct: ["state"], select: { state: true } }),
     ])
 
     return {
@@ -19,7 +20,54 @@ export const dashboardRouter = router({
       activeWorkOrders,
       locationCount,
       partnerCount,
+      stateCount: stateCount.length,
     }
+  }),
+
+  getClientContext: publicProcedure.query(async ({ ctx }) => {
+    const client = await ctx.prisma.client.findFirst({
+      where: { isActive: true },
+      include: {
+        org: { select: { name: true } },
+      },
+    })
+    if (!client) return null
+    return {
+      name: client.name,
+      fullName: client.fullName,
+      fmCompany: client.fmCompany,
+      fmContactName: client.fmContactName,
+      fmContactEmail: client.fmContactEmail,
+      acctDirector: client.acctDirector,
+      orgName: client.org.name,
+      createdAt: client.createdAt,
+    }
+  }),
+
+  getAssetsByCondition: publicProcedure.query(async ({ ctx }) => {
+    const result = await ctx.prisma.asset.groupBy({
+      by: ["condition"],
+      _count: { id: true },
+    })
+    return result.map((r) => ({ condition: r.condition, count: r._count.id }))
+  }),
+
+  getWorkOrderStatusSummary: publicProcedure.query(async ({ ctx }) => {
+    const result = await ctx.prisma.workOrder.groupBy({
+      by: ["status"],
+      _count: { id: true },
+    })
+    return result.map((r) => ({ status: r.status, count: r._count.id }))
+  }),
+
+  getPartnerSummary: publicProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.partner.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      include: {
+        _count: { select: { locations: true, workOrders: true } },
+      },
+    })
   }),
 
   getRecentWorkOrders: publicProcedure.query(async ({ ctx }) => {

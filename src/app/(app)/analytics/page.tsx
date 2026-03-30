@@ -13,6 +13,7 @@ import {
 const COLORS = ["#ea580c", "#7c3aed", "#2563eb", "#059669", "#d97706", "#dc2626", "#6366f1", "#0891b2"]
 
 export default function AnalyticsPage() {
+  const stats = trpc.dashboard.getStats.useQuery()
   const byState = trpc.analytics.inventoryByState.useQuery()
   const byCategory = trpc.analytics.inventoryByCategory.useQuery()
   const valueByLoc = trpc.analytics.valueByLocation.useQuery()
@@ -20,11 +21,45 @@ export default function AnalyticsPage() {
   const partners = trpc.analytics.partnerPerformance.useQuery()
   const utilization = trpc.analytics.utilizationReport.useQuery()
 
+  const avgValue = stats.data ? Math.round(stats.data.totalValue / (stats.data.totalAssets || 1)) : 0
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Analytics</h1>
-        <p className="text-sm text-muted-foreground">Asset and operational insights</p>
+        <p className="text-sm text-muted-foreground">Asset and operational insights across all locations</p>
+      </div>
+
+      {/* KPI Summary Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Total Assets</div>
+            <div className="text-2xl font-bold mt-1">{stats.data ? formatNumber(stats.data.totalAssets) : "—"}</div>
+            <div className="text-[10px] text-muted-foreground">{stats.data?.stateCount || 0} states</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Portfolio Value</div>
+            <div className="text-2xl font-bold mt-1">{stats.data ? formatCurrency(stats.data.totalValue) : "—"}</div>
+            <div className="text-[10px] text-muted-foreground">estimated current</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Avg Asset Value</div>
+            <div className="text-2xl font-bold mt-1">{formatCurrency(avgValue)}</div>
+            <div className="text-[10px] text-muted-foreground">per item</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-xs text-muted-foreground">Locations</div>
+            <div className="text-2xl font-bold mt-1">{stats.data?.locationCount || "—"}</div>
+            <div className="text-[10px] text-muted-foreground">{stats.data?.partnerCount || 0} partners</div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

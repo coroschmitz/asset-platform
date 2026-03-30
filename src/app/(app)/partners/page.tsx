@@ -4,17 +4,31 @@ import { trpc } from "@/lib/trpc"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { MapPin, ClipboardList, Shield, Server } from "lucide-react"
+import { MapPin, ClipboardList, Shield, Server, Mail, Phone, User } from "lucide-react"
 import Link from "next/link"
 
 export default function PartnersPage() {
   const partners = trpc.partners.list.useQuery()
 
+  const totalLocations = partners.data?.reduce((sum, p) => sum + p._count.locations, 0) || 0
+  const totalOrders = partners.data?.reduce((sum, p) => sum + p._count.workOrders, 0) || 0
+  const allStates = new Set(partners.data?.flatMap((p) => p.states) || [])
+
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Partner Network</h1>
-        <p className="text-sm text-muted-foreground">National partner movers and their service areas</p>
+        <p className="text-sm text-muted-foreground">
+          Corovan National Partner Network &mdash; {partners.data?.length || 0} Partners Across {allStates.size} States
+        </p>
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid grid-cols-4 gap-3">
+        <Card><CardContent className="p-3 text-center"><div className="text-xl font-bold">{partners.data?.length || 0}</div><div className="text-[10px] text-muted-foreground">Partners</div></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><div className="text-xl font-bold">{allStates.size}</div><div className="text-[10px] text-muted-foreground">States</div></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><div className="text-xl font-bold">{totalLocations}</div><div className="text-[10px] text-muted-foreground">Locations</div></CardContent></Card>
+        <Card><CardContent className="p-3 text-center"><div className="text-xl font-bold">{totalOrders}</div><div className="text-[10px] text-muted-foreground">Work Orders</div></CardContent></Card>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -72,6 +86,28 @@ export default function PartnersPage() {
                       {partner.apiEndpoint ? "Connected" : partner.isActive ? "Pending Integration" : "Offline"}
                     </span>
                   </div>
+
+                  {/* Contact Info */}
+                  {partner.contactName && (
+                    <div className="border-t pt-2 mt-1 space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <User className="h-3 w-3 text-muted-foreground" />
+                        <span>{partner.contactName}</span>
+                      </div>
+                      {partner.contactEmail && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Mail className="h-3 w-3" />
+                          <span>{partner.contactEmail}</span>
+                        </div>
+                      )}
+                      {partner.contactPhone && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Phone className="h-3 w-3" />
+                          <span>{partner.contactPhone}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
