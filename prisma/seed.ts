@@ -571,7 +571,106 @@ async function main() {
   console.log(`   Work Orders: ${workOrdersData.length}`)
 }
 
+// --- V2 SEED DATA ---
+async function seedV2() {
+  // Backfill billing on completed work orders
+  const completedOrders = await prisma.workOrder.findMany({ where: { status: 'COMPLETED' } })
+  for (const wo of completedOrders) {
+    const hours = 4 + Math.random() * 36
+    const rate = wo.priority === 'URGENT' ? 125.0 : 85.0
+    const materials = Math.random() > 0.6 ? Math.floor(Math.random() * 2000) : 0
+    const total = Math.round((hours * rate + materials) * 100) / 100
+    await prisma.workOrder.update({
+      where: { id: wo.id },
+      data: {
+        actualHours: Math.round(hours * 2) / 2,
+        laborRate: rate,
+        materialCost: materials,
+        totalCost: total,
+        respondedAt: new Date(wo.createdAt.getTime() + Math.random() * 4 * 60 * 60 * 1000),
+        checkedInAt: wo.scheduledDate ? new Date(wo.scheduledDate.getTime() + Math.random() * 2 * 60 * 60 * 1000) : null,
+        checkedOutAt: wo.completedDate,
+      }
+    })
+  }
+  console.log(`Backfilled billing on ${completedOrders.length} completed orders`)
+
+  // Backfill lifecycle on assets
+  const allAssets = await prisma.asset.findMany({ select: { id: true, status: true, condition: true, currentValue: true } })
+  const now = new Date()
+  for (const asset of allAssets) {
+    const rand = Math.random()
+    let lastMovedDate: Date
+    if (rand < 0.30) lastMovedDate = new Date(now.getTime() - Math.random() * 90 * 24*60*60*1000)
+    else if (rand < 0.55) lastMovedDate = new Date(now.getTime() - (90 + Math.random() * 90) * 24*60*60*1000)
+    else if (rand < 0.75) lastMovedDate = new Date(now.getTime() - (180 + Math.random() * 180) * 24*60*60*1000)
+    else lastMovedDate = new Date(now.getTime() - (365 + Math.random() * 730) * 24*60*60*1000)
+
+    const storageCost = asset.status === 'IN_STORAGE' ? Math.round((15 + Math.random() * 70) * 100) / 100 : null
+    const val = asset.currentValue || 0
+    const mult = asset.condition === 'EXCELLENT' ? 0.7 : asset.condition === 'GOOD' ? 0.5 : asset.condition === 'FAIR' ? 0.25 : asset.condition === 'POOR' ? 0.05 : 0
+    const resale = Math.round(val * mult)
+    let rec = 'KEEP'
+    if ((asset.condition === 'EXCELLENT' || asset.condition === 'GOOD') && resale > 500) rec = 'REDEPLOY'
+    else if (asset.condition === 'GOOD' && resale >= 100 && resale <= 500) rec = 'LIQUIDATE'
+    else if (asset.condition === 'FAIR' && resale < 200) rec = 'DONATE'
+    else if (asset.condition === 'POOR' || asset.condition === 'DAMAGED') rec = 'DISPOSE'
+
+    await prisma.asset.update({ where: { id: asset.id }, data: { lastMovedDate, monthlyStorageCost: storageCost, estimatedResaleValue: resale, dispositionRec: rec } })
+  }
+  console.log(`Backfilled lifecycle on ${allAssets.length} assets`)
+
+  // Create FmPlatformConfig for AAA
+  const aaaClient = await prisma.client.findFirst({ where: { customerKey: 'AAA' } })
+  if (aaaClient) {
+    await prisma.fmPlatformConfig.upsert({
+      where: { clientId_platform: { clientId: aaaClient.id, platform: 'cushman' } },
+      update: {},
+      create: { clientId: aaaClient.id, platform: 'cushman', apiUrl: 'https://api.cushmanwakefield.com/v1', isActive: true }
+    })
+  }
+
+  // Create partner scorecards
+  const partners = await prisma.partner.findMany()
+  for (const p of partners) {
+    const orders = await prisma.workOrder.count({ where: { partnerId: p.id } })
+    const completed = await prisma.workOrder.count({ where: { partnerId: p.id, status: 'COMPLETED' } })
+    const onTimeRate = orders > 0 ? 90 + Math.random() * 10 : 0
+    await prisma.partnerScorecard.upsert({
+      where: { partnerId_period: { partnerId: p.id, period: '2026-Q1' } },
+      update: {},
+      create: {
+        partnerId: p.id, period: '2026-Q1', totalOrders: orders, completedOnTime: completed,
+        onTimeRate: Math.round(onTimeRate * 10) / 10,
+        avgResponseHours: Math.round((1 + Math.random() * 3) * 10) / 10,
+        avgCompletionHours: Math.round((8 + Math.random() * 40) * 10) / 10,
+        communicationScore: Math.round((3.5 + Math.random() * 1.5) * 10) / 10,
+        qualityScore: Math.round((3.8 + Math.random() * 1.2) * 10) / 10,
+        overallScore: Math.round((3.5 + Math.random() * 1.5) * 10) / 10,
+        cbreStarRating: Math.round((3.5 + Math.random() * 1.5) * 10) / 10,
+      }
+    })
+  }
+  console.log(`Created scorecards for ${partners.length} partners`)
+
+  // Create sample dispositions
+  const storageAssets = await prisma.asset.findMany({ where: { status: 'IN_STORAGE', dispositionRec: { not: 'KEEP' } }, take: 50 })
+  const methods = ['REDEPLOYED','REDEPLOYED','DONATED','DONATED','RECYCLED','RECYCLED','DISPOSED','LIQUIDATED']
+  const materials = ['STEEL','WOOD','FABRIC','PLASTIC','MIXED']
+  for (const a of storageAssets) {
+    await prisma.disposition.create({
+      data: {
+        assetId: a.id, method: methods[Math.floor(Math.random()*methods.length)],
+        weightLbs: 20 + Math.random() * 480, materialType: materials[Math.floor(Math.random()*materials.length)],
+        carbonAvoidedLbs: Math.round(Math.random() * 500 * 100) / 100,
+      }
+    })
+  }
+  console.log(`Created ${storageAssets.length} dispositions`)
+}
+
 main()
+  .then(() => seedV2())
   .catch((e) => {
     console.error(e)
     process.exit(1)

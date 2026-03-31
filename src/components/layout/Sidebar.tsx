@@ -14,6 +14,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Building2,
+  Cable,
+  DollarSign,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -23,7 +25,9 @@ const navigation = [
   { name: "Work Orders", href: "/orders", icon: ClipboardList },
   { name: "Locations", href: "/locations", icon: MapPin },
   { name: "Partners", href: "/partners", icon: Users },
+  { name: "Integrations", href: "/integrations", icon: Cable },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Billing", href: "/billing", icon: DollarSign },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
