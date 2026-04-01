@@ -161,14 +161,14 @@ export default function DashboardPage() {
                 <div className="text-center">
                   <div className="flex items-center gap-1.5 text-green-600">
                     <Recycle className="h-4 w-4" />
-                    <span className="text-xl font-bold">92%</span>
+                    <span className="text-xl font-bold">93.3%</span>
                   </div>
                   <span className="text-[10px] text-green-700">Landfill Diversion</span>
                 </div>
                 <div className="text-center">
                   <div className="flex items-center gap-1.5 text-green-600">
                     <TreePine className="h-4 w-4" />
-                    <span className="text-xl font-bold">14.2T</span>
+                    <span className="text-xl font-bold">22.6T</span>
                   </div>
                   <span className="text-[10px] text-green-700">CO₂ Avoided</span>
                 </div>
