@@ -23,9 +23,14 @@ function fmtPct(n: number) {
 }
 
 export default async function SustainabilityPage() {
-  const dispositions = await prisma.disposition.findMany({
-    orderBy: { completedAt: "desc" },
-  })
+  let dispositions: Awaited<ReturnType<typeof prisma.disposition.findMany>> = []
+  try {
+    dispositions = await prisma.disposition.findMany({
+      orderBy: { completedAt: "desc" },
+    })
+  } catch {
+    // Table may not exist yet — show empty state
+  }
 
   const divertedMethods = ["recycle", "donate", "resell", "repurpose", "refurbish", "e-waste certified"]
   const landfillMethods = ["landfill", "dispose"]
