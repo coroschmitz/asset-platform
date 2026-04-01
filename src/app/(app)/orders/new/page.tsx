@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { trpc } from "@/lib/trpc"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -23,6 +24,8 @@ const REQUEST_TYPES: Record<string, string[]> = {
 
 export default function NewWorkOrderPage() {
   const router = useRouter()
+  const { data: session, status: sessionStatus } = useSession()
+  const activeClient = trpc.dashboard.getActiveClient.useQuery()
   const locations = trpc.locations.list.useQuery({})
   const createOrder = trpc.orders.create.useMutation({
     onSuccess: (order) => {
@@ -71,6 +74,12 @@ export default function NewWorkOrderPage() {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.push("/login")
+    }
+  }, [sessionStatus, router])
+
   const addEmail = () => {
     if (newEmail && !notificationEmails.includes(newEmail)) {
       setNotificationEmails([...notificationEmails, newEmail])
@@ -79,17 +88,20 @@ export default function NewWorkOrderPage() {
   }
 
   const handleSubmit = () => {
-    // In demo mode, use first available client/user
+    const clientId = activeClient.data?.id
+    const userId = session?.user?.id
+    if (!clientId || !userId) return
+
     createOrder.mutate({
-      clientId: "demo", // Will need actual client ID
+      clientId,
       requestType: form.requestType,
       requestCategory: form.requestCategory || undefined,
       priority: form.priority as any,
-      requestedBy: form.requestedBy || "Demo User",
+      requestedBy: form.requestedBy || session?.user?.name || "User",
       requestedByEmail: form.requestedByEmail || undefined,
       onsiteContact: form.onsiteContact || undefined,
       onsitePhone: form.onsitePhone || undefined,
-      createdById: "demo", // Will need actual user ID
+      createdById: userId,
       jobName: autoJobName || undefined,
       description: form.description || undefined,
       fromLocationId: form.fromLocationId || undefined,
@@ -417,7 +429,7 @@ export default function NewWorkOrderPage() {
           <Link href="/orders">
             <Button variant="outline">Cancel</Button>
           </Link>
-          <Button onClick={handleSubmit} disabled={!form.requestType || !form.requestedBy || createOrder.isPending}>
+          <Button onClick={handleSubmit} disabled={!form.requestType || !form.requestedBy || createOrder.isPending || !activeClient.data?.id || !session?.user?.id}>
             {createOrder.isPending ? "Saving..." : "Save Work Order"}
           </Button>
         </div>

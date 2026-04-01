@@ -54,22 +54,55 @@ export async function GET(request: NextRequest) {
       byCategory[cat].monthlyCost += asset.monthlyStorageCost || 0;
     }
 
+    // Build asset data with computed fields for the lifecycle page
+    const assetsWithComputed = dormantAssets.map((a) => {
+      const monthsDormant = a.lastMovedDate
+        ? Math.floor((Date.now() - a.lastMovedDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
+        : a.dateReceived
+        ? Math.floor((Date.now() - a.dateReceived.getTime()) / (1000 * 60 * 60 * 24 * 30))
+        : 0
+      return {
+        id: a.id,
+        tagNumber: a.tagNumber,
+        description: a.description,
+        clientName: a.client?.name ?? "",
+        locationName: a.location?.name ?? "",
+        state: a.location?.state ?? "",
+        monthsDormant,
+        monthlyStorageCost: a.monthlyStorageCost || 0,
+        condition: a.condition,
+        dispositionRec: a.dispositionRec || "Unassigned",
+        estimatedResaleValue: a.estimatedResaleValue || 0,
+      }
+    })
+
+    // Disposition breakdown for pie chart
+    const dispositionBreakdown = Object.entries(byDisposition).map(([name, data]) => ({
+      name,
+      value: data.count,
+    }))
+
+    // State breakdown for bar chart
+    const stateBreakdown = Object.entries(byState).map(([state, data]) => ({
+      state,
+      count: data.count,
+    }))
+
+    // Return flat shape consumed by lifecycle page and dormant alert
     return NextResponse.json({
-      success: true,
-      data: {
+      summary: {
         totalDormant,
         totalMonthlyCost: Math.round(totalMonthlyCost * 100) / 100,
         totalAnnualCost: Math.round(totalAnnualCost * 100) / 100,
-        estimatedRecovery: Math.round(estimatedRecovery * 100) / 100,
-        byDisposition,
-        byState,
-        byCategory,
-        assets: dormantAssets,
+        totalEstimatedRecovery: Math.round(estimatedRecovery * 100) / 100,
       },
+      dispositionBreakdown,
+      byState: stateBreakdown,
+      assets: assetsWithComputed,
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { summary: { totalDormant: 0, totalMonthlyCost: 0, totalAnnualCost: 0, totalEstimatedRecovery: 0 }, dispositionBreakdown: [], byState: [], assets: [] },
       { status: 500 }
     );
   }

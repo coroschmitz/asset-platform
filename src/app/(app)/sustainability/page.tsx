@@ -36,8 +36,8 @@ export default async function SustainabilityPage() {
   const useMock = dispositions.length === 0
   const mock = buildMockData()
 
-  const divertedMethods = ["recycle", "donate", "resell", "resell/remarket", "repurpose", "repurpose internal", "refurbish", "e-waste certified", "itad certified"]
-  const landfillMethods = ["landfill", "dispose"]
+  const divertedMethods = ["recycle", "donate", "resell", "resell/remarket", "repurpose", "repurpose internal", "refurbish", "e-waste certified", "itad certified", "redeployed", "donated", "recycled", "liquidated"]
+  const landfillMethods = ["landfill", "dispose", "disposed"]
   // hazmat disposal is neither diverted nor landfill — regulated waste stream
 
   let totalDiverted = 0
@@ -146,6 +146,7 @@ export default async function SustainabilityPage() {
   const sortedMaterials = Object.entries(byMaterial).sort(([, a], [, b]) => b.weightLbs - a.weightLbs)
   const sortedRecipients = Object.entries(donationRecipients).sort(([, a], [, b]) => b.count - a.count)
 
+  // Handle both mock display names and seed data method names (uppercase enum-style)
   const METHOD_COLORS: Record<string, string> = {
     "Resell/Remarket": "bg-purple-500",
     "Recycle": "bg-green-500",
@@ -155,6 +156,21 @@ export default async function SustainabilityPage() {
     "Refurbish": "bg-cyan-500",
     "Hazmat Disposal": "bg-orange-500",
     "Landfill": "bg-red-400",
+    // Seed data method names
+    "REDEPLOYED": "bg-amber-500",
+    "DONATED": "bg-blue-500",
+    "RECYCLED": "bg-green-500",
+    "DISPOSED": "bg-red-400",
+    "LIQUIDATED": "bg-purple-500",
+  }
+
+  // Map seed method names to display names
+  const METHOD_DISPLAY: Record<string, string> = {
+    "REDEPLOYED": "Redeploy",
+    "DONATED": "Donate",
+    "RECYCLED": "Recycle",
+    "DISPOSED": "Dispose",
+    "LIQUIDATED": "Liquidate",
   }
 
   return (
@@ -271,12 +287,13 @@ export default async function SustainabilityPage() {
             <div className="flex h-6 rounded-full overflow-hidden gap-0.5 mb-4">
               {sortedMethods.map(([method, data]) => {
                 const pct = (data.count / totalItems) * 100
+                const displayName = METHOD_DISPLAY[method] || method
                 return (
                   <div
                     key={method}
                     className={cn("transition-all", METHOD_COLORS[method] || "bg-gray-400")}
                     style={{ width: `${pct}%` }}
-                    title={`${method}: ${data.count} (${pct.toFixed(1)}%)`}
+                    title={`${displayName}: ${data.count} (${pct.toFixed(1)}%)`}
                   />
                 )
               })}
@@ -285,11 +302,12 @@ export default async function SustainabilityPage() {
               {sortedMethods.map(([method, data]) => {
                 const pct = (data.count / totalItems) * 100
                 const isLandfill = landfillMethods.includes(method.toLowerCase())
+                const displayName = METHOD_DISPLAY[method] || method
                 return (
                   <div key={method} className="flex items-center justify-between text-sm">
                     <div className="flex items-center gap-2">
                       <span className={cn("h-3 w-3 rounded-sm", METHOD_COLORS[method] || "bg-gray-400")} />
-                      <span className="font-medium">{method}</span>
+                      <span className="font-medium">{displayName}</span>
                       {isLandfill && <Badge variant="destructive" className="text-[9px] px-1 py-0">LANDFILL</Badge>}
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">

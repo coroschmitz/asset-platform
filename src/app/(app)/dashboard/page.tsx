@@ -8,6 +8,7 @@ import { NationalMap } from "@/components/map/NationalMap"
 import { CategoryPieChart } from "@/components/charts/CategoryPieChart"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { DormantAlert } from "./dormant-alert"
 import Link from "next/link"
 
 const STATUS_COLORS: Record<string, string> = {
@@ -178,6 +179,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </Link>
+
+      {/* Dormant Asset Alert */}
+      <DormantAlert />
 
       {/* Asset Condition + Work Order Status bars */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -127,4 +127,12 @@ export const dashboardRouter = router({
     })
     return result.map((r) => ({ status: r.status, count: r._count.id }))
   }),
+
+  getActiveClient: publicProcedure.query(async ({ ctx }) => {
+    const client = await ctx.prisma.client.findFirst({
+      where: { isActive: true },
+      select: { id: true, name: true },
+    })
+    return client
+  }),
 })

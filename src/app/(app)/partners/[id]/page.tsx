@@ -21,21 +21,26 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "bg-red-100 text-red-700",
 }
 
-interface Scorecard {
-  totalOrders: number
-  completedOnTime: number
-  onTimeRate: number
-  avgResponseHours: number
-  avgCompletionHours: number
-  communicationScore: number
-  qualityScore: number
-  overallScore: number
-  cbreStarRating: number
-  timeOfDelivery?: number
-  levelOfCommunication?: number
-  qualityOfProducts?: number
-  qualityOfService?: number
-  overallRecommendation?: number
+interface LiveMetrics {
+  totalWorkOrders: number
+  completedWorkOrders: number
+  onTimeDeliveryRate: number
+  avgResponseTimeHrs: number
+  avgCompletionTimeHrs: number
+  slaComplianceRate: number
+}
+
+interface CbreRating {
+  timeOfDelivery: number
+  communication: number
+  qualityOfProducts: number
+  qualityOfService: number
+  overallRecommendation: number
+}
+
+interface ScorecardResponse {
+  liveMetrics: LiveMetrics
+  cbreRating: CbreRating
 }
 
 function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
@@ -71,7 +76,7 @@ function ScorecardRow({ label, score }: { label: string; score: number }) {
 export default function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const partner = trpc.partners.getById.useQuery({ id })
-  const [scorecard, setScorecard] = useState<Scorecard | null>(null)
+  const [scorecard, setScorecard] = useState<ScorecardResponse | null>(null)
   const [scorecardLoading, setScorecardLoading] = useState(true)
 
   useEffect(() => {
@@ -79,8 +84,10 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
       try {
         const res = await fetch(`/api/v1/partners/${id}/scorecard`)
         if (res.ok) {
-          const data = await res.json()
-          setScorecard(data)
+          const json = await res.json()
+          // API returns { success, data: { scorecard, liveMetrics, cbreRating } }
+          const payload = json.data ?? json
+          setScorecard(payload)
         }
       } catch {
         // API not yet available
@@ -121,16 +128,18 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
   // SLA compliance (derive from work orders)
   const completed = p.workOrders.filter((wo) => wo.status === "COMPLETED")
   const slaTarget = p.slaTarget
-  const met = scorecard?.completedOnTime ?? Math.round(completed.length * (slaTarget / 100))
+  const liveMetrics = scorecard?.liveMetrics
+  const cbreRating = scorecard?.cbreRating
+  const met = liveMetrics ? Math.round(liveMetrics.completedWorkOrders * (liveMetrics.onTimeDeliveryRate / 100)) : Math.round(completed.length * (slaTarget / 100))
   const breached = completed.length - met
   const atRisk = p.workOrders.filter((wo) => wo.status === "IN_PROGRESS").length
 
-  // CBRE star categories
-  const timeOfDelivery = scorecard?.timeOfDelivery ?? scorecard?.overallScore ?? 0
-  const levelOfCommunication = scorecard?.levelOfCommunication ?? scorecard?.communicationScore ?? 0
-  const qualityOfProducts = scorecard?.qualityOfProducts ?? scorecard?.qualityScore ?? 0
-  const qualityOfService = scorecard?.qualityOfService ?? scorecard?.overallScore ?? 0
-  const overallRecommendation = scorecard?.overallRecommendation ?? scorecard?.cbreStarRating ?? 0
+  // CBRE star categories from API response
+  const timeOfDelivery = cbreRating?.timeOfDelivery ?? 0
+  const levelOfCommunication = cbreRating?.communication ?? 0
+  const qualityOfProducts = cbreRating?.qualityOfProducts ?? 0
+  const qualityOfService = cbreRating?.qualityOfService ?? 0
+  const overallRecommendation = cbreRating?.overallRecommendation ?? 0
 
   return (
     <div className="space-y-4">
@@ -181,10 +190,10 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
           <CardContent className="p-6 text-center">
             <div className="text-xs text-muted-foreground mb-1">CBRE Star Rating</div>
             <div className="text-5xl font-bold text-yellow-500 mb-2">
-              {scorecardLoading ? "—" : (scorecard?.cbreStarRating ?? 0).toFixed(1)}
+              {scorecardLoading ? "—" : (overallRecommendation).toFixed(1)}
             </div>
             {!scorecardLoading && scorecard && (
-              <StarRating rating={scorecard.cbreStarRating} />
+              <StarRating rating={overallRecommendation} />
             )}
             <div className="text-xs text-muted-foreground mt-1">out of 5.0</div>
           </CardContent>
@@ -227,7 +236,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
               <span className="text-xs text-muted-foreground">On-Time Rate</span>
             </div>
             <div className="text-2xl font-bold">
-              {scorecardLoading ? "—" : `${(scorecard?.onTimeRate ?? 0).toFixed(1)}%`}
+              {scorecardLoading ? "—" : `${(liveMetrics?.onTimeDeliveryRate ?? 0).toFixed(1)}%`}
             </div>
           </CardContent>
         </Card>
@@ -238,7 +247,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
               <span className="text-xs text-muted-foreground">Avg Response</span>
             </div>
             <div className="text-2xl font-bold">
-              {scorecardLoading ? "—" : `${(scorecard?.avgResponseHours ?? 0).toFixed(1)}h`}
+              {scorecardLoading ? "—" : `${(liveMetrics?.avgResponseTimeHrs ?? 0).toFixed(1)}h`}
             </div>
           </CardContent>
         </Card>
@@ -249,7 +258,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
               <span className="text-xs text-muted-foreground">Avg Completion</span>
             </div>
             <div className="text-2xl font-bold">
-              {scorecardLoading ? "—" : `${(scorecard?.avgCompletionHours ?? 0).toFixed(1)}h`}
+              {scorecardLoading ? "—" : `${(liveMetrics?.avgCompletionTimeHrs ?? 0).toFixed(1)}h`}
             </div>
           </CardContent>
         </Card>
@@ -260,7 +269,7 @@ export default function PartnerDetailPage({ params }: { params: Promise<{ id: st
               <span className="text-xs text-muted-foreground">Total Orders</span>
             </div>
             <div className="text-2xl font-bold">
-              {scorecardLoading ? "—" : (scorecard?.totalOrders ?? p.workOrders.length)}
+              {scorecardLoading ? "—" : (liveMetrics?.totalWorkOrders ?? p.workOrders.length)}
             </div>
           </CardContent>
         </Card>

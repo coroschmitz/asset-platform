@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
+import { trpc } from "@/lib/trpc"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -15,17 +16,19 @@ interface WorkOrder {
   clientName: string
   jobName: string | null
   partnerName: string | null
-  completedDate: string | null
+  completedDate: Date | null
   actualHours: number | null
-  totalCost: number
+  laborRate: number | null
+  materialCost: number | null
+  totalCost: number | null
   nteAmount: number | null
   invoiceNumber: string | null
-  invoicedAt: string | null
+  invoicedAt: Date | null
 }
 
 interface InvoiceGroup {
   invoiceNumber: string
-  invoicedAt: string
+  invoicedAt: Date | null
   clientName: string
   orders: WorkOrder[]
   total: number
@@ -33,33 +36,16 @@ interface InvoiceGroup {
 
 export default function BillingPage() {
   const [tab, setTab] = useState("unbilled")
-  const [unbilled, setUnbilled] = useState<WorkOrder[]>([])
-  const [invoiced, setInvoiced] = useState<WorkOrder[]>([])
-  const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [generating, setGenerating] = useState(false)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await fetch("/api/v1/billing/export?format=json")
-      if (res.ok) {
-        const data = await res.json()
-        const all: WorkOrder[] = data.workOrders ?? data ?? []
-        setUnbilled(all.filter((wo: WorkOrder) => wo.invoiceNumber == null))
-        setInvoiced(all.filter((wo: WorkOrder) => wo.invoiceNumber != null))
-      }
-    } catch {
-      // API not yet available — use empty state
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const { data: allOrders, isLoading: loading, refetch } = trpc.billing.getWorkOrders.useQuery()
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const unbilled = allOrders?.filter((wo) => wo.invoiceNumber == null) ?? []
+  const invoiced = allOrders?.filter((wo) => wo.invoiceNumber != null) ?? []
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {
@@ -89,7 +75,7 @@ export default function BillingPage() {
         const data = await res.json()
         setSuccessMsg(`Invoice ${data.invoiceNumber} generated successfully`)
         setSelected(new Set())
-        fetchData()
+        refetch()
       }
     } catch {
       // handle silently
@@ -104,7 +90,7 @@ export default function BillingPage() {
   }
 
   // Summary cards
-  const totalUnbilled = unbilled.reduce((s, wo) => s + wo.totalCost, 0)
+  const totalUnbilled = unbilled.reduce((s, wo) => s + (wo.totalCost ?? 0), 0)
   const avgValue = unbilled.length > 0 ? totalUnbilled / unbilled.length : 0
 
   // Group invoiced by invoiceNumber
@@ -116,7 +102,7 @@ export default function BillingPage() {
     if (!group) {
       group = {
         invoiceNumber: wo.invoiceNumber,
-        invoicedAt: wo.invoicedAt || "",
+        invoicedAt: wo.invoicedAt,
         clientName: wo.clientName,
         orders: [],
         total: 0,
@@ -125,7 +111,7 @@ export default function BillingPage() {
       invoiceGroups.push(group)
     }
     group.orders.push(wo)
-    group.total += wo.totalCost
+    group.total += wo.totalCost ?? 0
   }
 
   return (
@@ -221,7 +207,7 @@ export default function BillingPage() {
                   <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">No unbilled work orders</td></tr>
                 ) : (
                   unbilled.map((wo, idx) => {
-                    const overNte = wo.nteAmount != null && wo.totalCost > wo.nteAmount
+                    const overNte = wo.nteAmount != null && (wo.totalCost ?? 0) > wo.nteAmount
                     return (
                       <tr
                         key={wo.id}
@@ -247,7 +233,7 @@ export default function BillingPage() {
                           {wo.completedDate ? format(new Date(wo.completedDate), "MMM d, yyyy") : "—"}
                         </td>
                         <td className="px-3 py-2.5 text-right">{wo.actualHours ?? "—"}</td>
-                        <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(wo.totalCost)}</td>
+                        <td className="px-3 py-2.5 text-right font-medium">{formatCurrency(wo.totalCost ?? 0)}</td>
                         <td className={cn("px-3 py-2.5 text-right", overNte && "text-red-600 font-semibold")}>
                           {wo.nteAmount != null ? formatCurrency(wo.nteAmount) : "—"}
                         </td>
@@ -338,7 +324,7 @@ export default function BillingPage() {
                             </td>
                             <td className="px-3 py-2 text-xs">{wo.jobName || "—"}</td>
                             <td className="px-3 py-2 text-xs text-center">{wo.actualHours ?? "—"}h</td>
-                            <td className="px-3 py-2 text-xs text-right">{formatCurrency(wo.totalCost)}</td>
+                            <td className="px-3 py-2 text-xs text-right">{formatCurrency(wo.totalCost ?? 0)}</td>
                           </tr>
                         ))}
                       </tbody>
