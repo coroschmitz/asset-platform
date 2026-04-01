@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatNumber } from "@/lib/utils"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import {
   Leaf, Recycle, TreePine, TrendingUp, Scale, Building2,
   ArrowDownRight, DollarSign, Award, Target, Factory, Truck,
+  Download,
 } from "lucide-react"
 
 function fmt$(n: number) {
@@ -203,6 +205,21 @@ export default async function SustainabilityPage() {
             <div className="text-right">
               <div className="text-[10px] uppercase tracking-wider text-green-300">Items Tracked</div>
               <div className="font-medium">{formatNumber(totalItems)}</div>
+            </div>
+            <div className="h-8 w-px bg-green-600" />
+            <div className="flex items-center gap-2">
+              <a href="/api/v1/sustainability/gri306?clientId=all&format=csv" download>
+                <Button size="sm" variant="outline" className="bg-white/10 border-green-400 text-white hover:bg-white/20 text-xs">
+                  <Download className="h-3 w-3 mr-1" />
+                  GRI 306 Report
+                </Button>
+              </a>
+              <a href="/api/v1/sustainability/scope3?clientId=all&format=csv" download>
+                <Button size="sm" variant="outline" className="bg-white/10 border-green-400 text-white hover:bg-white/20 text-xs">
+                  <Download className="h-3 w-3 mr-1" />
+                  Scope 3 Report
+                </Button>
+              </a>
             </div>
           </div>
         </div>

@@ -928,9 +928,31 @@ async function seedV3() {
   console.log("\n✅ V3 Seed complete - Multi-client data added")
 }
 
+// --- V4 SEED DATA: EPA WARM Emission Factors ---
+async function seedV4() {
+  const existing = await prisma.emissionFactor.findFirst()
+  if (existing) { console.log("V4 emission factors already exist, skipping"); return }
+
+  const factors = [
+    { materialType: "Steel", dispositionMethod: "recycled", co2PerTonLbs: 3600, source: "EPA WARM v16", year: 2024 },
+    { materialType: "Steel", dispositionMethod: "landfilled", co2PerTonLbs: 1040, source: "EPA WARM v16", year: 2024 },
+    { materialType: "Wood", dispositionMethod: "recycled", co2PerTonLbs: 1400, source: "EPA WARM v16", year: 2024 },
+    { materialType: "Wood", dispositionMethod: "landfilled", co2PerTonLbs: -734, source: "EPA WARM v16", year: 2024 },
+    { materialType: "Fabric", dispositionMethod: "recycled", co2PerTonLbs: 6400, source: "EPA WARM v16", year: 2024 },
+    { materialType: "Plastic", dispositionMethod: "recycled", co2PerTonLbs: 2400, source: "EPA WARM v16", year: 2024 },
+    { materialType: "Electronics", dispositionMethod: "recycled", co2PerTonLbs: 6200, source: "EPA WARM v16", year: 2024 },
+    { materialType: "Mixed materials", dispositionMethod: "recycled", co2PerTonLbs: 2830, source: "EPA WARM v16", year: 2024 },
+  ]
+
+  await prisma.emissionFactor.createMany({ data: factors })
+  console.log(`Created ${factors.length} EPA WARM emission factors`)
+  console.log("\n✅ V4 Seed complete - Emission factors added")
+}
+
 main()
   .then(() => seedV2())
   .then(() => seedV3())
+  .then(() => seedV4())
   .catch((e) => {
     console.error(e)
     process.exit(1)

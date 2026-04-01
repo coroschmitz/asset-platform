@@ -41,6 +41,8 @@ model Client {
   users          ClientUser[]
   config         ClientConfig?
   fmConfigs      FmPlatformConfig[]
+  corrigoConfig  CorrigoConfig?
+  sustainabilityProjects SustainabilityProject[]
 }
 
 model ClientConfig {
@@ -87,6 +89,7 @@ model Location {
   facilities     Facility[]
   workOrdersFrom WorkOrder[]  @relation("FromLocation")
   workOrdersTo   WorkOrder[]  @relation("ToLocation")
+  sustainabilityProjects SustainabilityProject[]
 }
 
 enum LocationType {
@@ -267,6 +270,7 @@ model WorkOrder {
   logs             ActivityLog[]
   attachments      Attachment[]
   notifications    Notification[]
+  approvalSteps    ApprovalStep[]
 
   @@index([clientId, status])
   @@index([partnerId])
@@ -357,9 +361,10 @@ model User {
   avatarUrl   String?
   isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
-  workOrders  WorkOrder[]
-  logs        ActivityLog[]
-  attachments Attachment[]
+  workOrders    WorkOrder[]
+  logs          ActivityLog[]
+  attachments   Attachment[]
+  approvalSteps ApprovalStep[]
 }
 
 enum UserRole {
@@ -419,6 +424,36 @@ model FmPlatformConfig {
   @@unique([clientId, platform])
 }
 
+// ─── CORRIGO INTEGRATION ───
+
+model CorrigoConfig {
+  id              String   @id @default(cuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id])
+  companyId       String
+  apiUrl          String   @default("https://am-apiconnect.corrigo.com/api/v5.4.1")
+  clientIdOAuth   String
+  clientSecret    String
+  accessToken     String?
+  tokenExpiresAt  DateTime?
+  webhookSecret   String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  fieldMappings   CorrigoFieldMapping[]
+  @@unique([clientId])
+}
+
+model CorrigoFieldMapping {
+  id              String  @id @default(cuid())
+  corrigoConfigId String
+  corrigoConfig   CorrigoConfig @relation(fields: [corrigoConfigId], references: [id])
+  corrigoField    String
+  platformField   String
+  direction       String  @default("both")
+  @@unique([corrigoConfigId, corrigoField])
+}
+
 // ─── PARTNER SCORECARDS ───
 
 model PartnerScorecard {
@@ -448,6 +483,8 @@ model Disposition {
   assetId          String
   asset            Asset     @relation(fields: [assetId], references: [id])
   workOrderId      String?
+  projectId        String?
+  project          SustainabilityProject? @relation(fields: [projectId], references: [id])
   method           String
   weightLbs        Float?
   materialType     String?
@@ -459,4 +496,60 @@ model Disposition {
   createdAt        DateTime  @default(now())
   @@index([method])
   @@index([completedAt])
+}
+
+// ─── APPROVAL WORKFLOW ───
+
+model ApprovalRule {
+  id              String   @id @default(cuid())
+  clientId        String
+  triggerField    String
+  triggerOperator String
+  triggerValue    String
+  approverUserId  String
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+}
+
+model ApprovalStep {
+  id              String    @id @default(cuid())
+  workOrderId     String
+  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id])
+  ruleId          String
+  approverUserId  String
+  approver        User      @relation(fields: [approverUserId], references: [id])
+  status          String    @default("pending")
+  notes           String?
+  decidedAt       DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+// ─── SUSTAINABILITY & ESG ───
+
+model SustainabilityProject {
+  id              String   @id @default(cuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id])
+  name            String
+  locationId      String?
+  location        Location? @relation(fields: [locationId], references: [id])
+  startDate       DateTime
+  endDate         DateTime?
+  status          String   @default("active")
+  totalWeightLbs  Float?
+  totalDiverted   Float?
+  diversionRate   Float?
+  co2AvoidedLbs   Float?
+  createdAt       DateTime @default(now())
+  dispositions    Disposition[]
+}
+
+model EmissionFactor {
+  id              String  @id @default(cuid())
+  materialType    String
+  dispositionMethod String
+  co2PerTonLbs    Float
+  source          String
+  year            Int
+  @@unique([materialType, dispositionMethod])
 }

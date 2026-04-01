@@ -164,6 +164,69 @@ export const dashboardRouter = router({
     return client
   }),
 
+  getSLAAlerts: publicProcedure
+    .input(z.object({ clientId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const now = new Date()
+      const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
+      const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+      const clientFilter = input?.clientId ? { clientId: input.clientId } : {}
+
+      // Response SLA breached
+      const responseBreached = await ctx.prisma.workOrder.findMany({
+        where: {
+          ...clientFilter,
+          slaResponseDue: { lt: now },
+          respondedAt: null,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+        },
+        select: { id: true, orderNumber: true, jobName: true, slaResponseDue: true, priority: true },
+        take: 20,
+      })
+
+      // Completion SLA breached
+      const completionBreached = await ctx.prisma.workOrder.findMany({
+        where: {
+          ...clientFilter,
+          slaCompletionDue: { lt: now },
+          completedDate: null,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+        },
+        select: { id: true, orderNumber: true, jobName: true, slaCompletionDue: true, priority: true },
+        take: 20,
+      })
+
+      // Response at risk (within 2 hours)
+      const responseAtRisk = await ctx.prisma.workOrder.findMany({
+        where: {
+          ...clientFilter,
+          slaResponseDue: { gte: now, lte: twoHoursFromNow },
+          respondedAt: null,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+        },
+        select: { id: true, orderNumber: true, jobName: true, slaResponseDue: true, priority: true },
+        take: 20,
+      })
+
+      // Completion at risk (within 24 hours)
+      const completionAtRisk = await ctx.prisma.workOrder.findMany({
+        where: {
+          ...clientFilter,
+          slaCompletionDue: { gte: now, lte: twentyFourHoursFromNow },
+          completedDate: null,
+          status: { notIn: ["COMPLETED", "CANCELLED"] },
+        },
+        select: { id: true, orderNumber: true, jobName: true, slaCompletionDue: true, priority: true },
+        take: 20,
+      })
+
+      return {
+        breached: [...responseBreached.map(w => ({ ...w, type: "response" as const })), ...completionBreached.map(w => ({ ...w, type: "completion" as const }))],
+        atRisk: [...responseAtRisk.map(w => ({ ...w, type: "response" as const })), ...completionAtRisk.map(w => ({ ...w, type: "completion" as const }))],
+      }
+    }),
+
   getClients: publicProcedure.query(async ({ ctx }) => {
     return ctx.prisma.client.findMany({
       where: { isActive: true },
