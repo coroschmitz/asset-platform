@@ -2,7 +2,7 @@
 
 import { trpc } from "@/lib/trpc"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Package, DollarSign, ClipboardList, MapPin, Users, Building2, UserCheck, Phone, Mail, Globe } from "lucide-react"
+import { Package, DollarSign, ClipboardList, MapPin, Users, Building2, UserCheck, Phone, Mail, Globe, Leaf, Recycle, TreePine } from "lucide-react"
 import { formatCurrency, formatNumber } from "@/lib/utils"
 import { NationalMap } from "@/components/map/NationalMap"
 import { CategoryPieChart } from "@/components/charts/CategoryPieChart"
@@ -142,6 +142,42 @@ export default function DashboardPage() {
           color="text-primary bg-orange-50"
         />
       </div>
+
+      {/* Sustainability Banner */}
+      <Link href="/sustainability">
+        <Card className="border-green-200 bg-gradient-to-r from-green-50 to-emerald-50 hover:shadow-md transition-shadow">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-600 text-white">
+                  <Leaf className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-green-900">Sustainability Impact</h3>
+                  <p className="text-sm text-green-700">Track diversion, carbon avoidance &amp; circular economy metrics</p>
+                </div>
+              </div>
+              <div className="hidden md:flex items-center gap-8">
+                <div className="text-center">
+                  <div className="flex items-center gap-1.5 text-green-600">
+                    <Recycle className="h-4 w-4" />
+                    <span className="text-xl font-bold">92%</span>
+                  </div>
+                  <span className="text-[10px] text-green-700">Landfill Diversion</span>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center gap-1.5 text-green-600">
+                    <TreePine className="h-4 w-4" />
+                    <span className="text-xl font-bold">14.2T</span>
+                  </div>
+                  <span className="text-[10px] text-green-700">CO₂ Avoided</span>
+                </div>
+                <span className="text-xs text-green-600 font-medium">View Dashboard →</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Asset Condition + Work Order Status bars */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

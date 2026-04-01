@@ -16,6 +16,7 @@ import {
   Building2,
   Cable,
   DollarSign,
+  Leaf,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -26,6 +27,7 @@ const navigation = [
   { name: "Locations", href: "/locations", icon: MapPin },
   { name: "Partners", href: "/partners", icon: Users },
   { name: "Integrations", href: "/integrations", icon: Cable },
+  { name: "Sustainability", href: "/sustainability", icon: Leaf },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Billing", href: "/billing", icon: DollarSign },
   { name: "Settings", href: "/settings", icon: Settings },
