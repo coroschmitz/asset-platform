@@ -1,6 +1,7 @@
 "use client"
 
 import { trpc } from "@/lib/trpc"
+import { useClientContext } from "@/lib/client-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Package, DollarSign, ClipboardList, MapPin, Users, Building2, UserCheck, Phone, Mail, Globe, Leaf, Recycle, TreePine } from "lucide-react"
 import { formatCurrency, formatNumber } from "@/lib/utils"
@@ -47,13 +48,15 @@ const PRIORITY_COLORS: Record<string, string> = {
 }
 
 export default function DashboardPage() {
-  const stats = trpc.dashboard.getStats.useQuery()
-  const clientCtx = trpc.dashboard.getClientContext.useQuery()
-  const recentOrders = trpc.dashboard.getRecentWorkOrders.useQuery()
-  const categories = trpc.dashboard.getAssetsByCategory.useQuery()
-  const mapData = trpc.dashboard.getLocationMapData.useQuery()
-  const conditions = trpc.dashboard.getAssetsByCondition.useQuery()
-  const woStatus = trpc.dashboard.getWorkOrderStatusSummary.useQuery()
+  const { clientId } = useClientContext()
+  const input = clientId ? { clientId } : undefined
+  const stats = trpc.dashboard.getStats.useQuery(input)
+  const clientCtx = trpc.dashboard.getClientContext.useQuery(input)
+  const recentOrders = trpc.dashboard.getRecentWorkOrders.useQuery(input)
+  const categories = trpc.dashboard.getAssetsByCategory.useQuery(input)
+  const mapData = trpc.dashboard.getLocationMapData.useQuery(input)
+  const conditions = trpc.dashboard.getAssetsByCondition.useQuery(input)
+  const woStatus = trpc.dashboard.getWorkOrderStatusSummary.useQuery(input)
   const partners = trpc.dashboard.getPartnerSummary.useQuery()
 
   const totalConditions = conditions.data?.reduce((sum, c) => sum + c.count, 0) || 1

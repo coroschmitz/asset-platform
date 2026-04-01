@@ -5,6 +5,7 @@ export const locationsRouter = router({
   list: publicProcedure
     .input(
       z.object({
+        clientId: z.string().optional(),
         type: z.string().optional(),
         search: z.string().optional(),
         state: z.string().optional(),
@@ -12,6 +13,7 @@ export const locationsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const where: any = { isActive: true }
+      if (input.clientId) where.clientId = input.clientId
       if (input.type && input.type !== "ALL") where.locationType = input.type
       if (input.state) where.state = input.state
       if (input.search) {

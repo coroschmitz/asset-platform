@@ -8,6 +8,7 @@ export const assetsRouter = router({
       z.object({
         page: z.number().default(1),
         pageSize: z.number().default(100),
+        clientId: z.string().optional(),
         search: z.string().optional(),
         locationId: z.string().optional(),
         type: z.array(z.string()).optional(),
@@ -21,6 +22,7 @@ export const assetsRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const where: Prisma.AssetWhereInput = {}
+      if (input.clientId) where.clientId = input.clientId
 
       if (input.search) {
         where.OR = [
@@ -74,20 +76,26 @@ export const assetsRouter = router({
     })
   }),
 
-  getFilterOptions: publicProcedure.query(async ({ ctx }) => {
+  getFilterOptions: publicProcedure
+    .input(z.object({ clientId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+    const assetWhere = input?.clientId ? { clientId: input.clientId } : {}
+    const locWhere: any = { isActive: true }
+    if (input?.clientId) locWhere.clientId = input.clientId
+
     const [types, categories, statuses, conditions, manufacturers, locations] = await Promise.all([
-      ctx.prisma.asset.findMany({ distinct: ["type"], select: { type: true }, orderBy: { type: "asc" } }),
-      ctx.prisma.asset.findMany({ distinct: ["category"], select: { category: true }, orderBy: { category: "asc" } }),
-      ctx.prisma.asset.findMany({ distinct: ["status"], select: { status: true } }),
-      ctx.prisma.asset.findMany({ distinct: ["condition"], select: { condition: true } }),
+      ctx.prisma.asset.findMany({ distinct: ["type"], where: assetWhere, select: { type: true }, orderBy: { type: "asc" } }),
+      ctx.prisma.asset.findMany({ distinct: ["category"], where: assetWhere, select: { category: true }, orderBy: { category: "asc" } }),
+      ctx.prisma.asset.findMany({ distinct: ["status"], where: assetWhere, select: { status: true } }),
+      ctx.prisma.asset.findMany({ distinct: ["condition"], where: assetWhere, select: { condition: true } }),
       ctx.prisma.asset.findMany({
         distinct: ["manufacturer"],
         select: { manufacturer: true },
-        where: { manufacturer: { not: null } },
+        where: { ...assetWhere, manufacturer: { not: null } },
         orderBy: { manufacturer: "asc" },
       }),
       ctx.prisma.location.findMany({
-        where: { isActive: true },
+        where: locWhere,
         select: { id: true, name: true, city: true, state: true, locationType: true },
         orderBy: { name: "asc" },
       }),

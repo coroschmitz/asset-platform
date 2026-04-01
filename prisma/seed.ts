@@ -212,6 +212,42 @@ const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   "Longmont, CO": { lat: 40.1672, lng: -105.1019 },
   "Loveland, CO": { lat: 40.3978, lng: -105.0750 },
   "Castle Rock, CO": { lat: 39.3722, lng: -104.8561 },
+  // ── Washington (10 cities) ──
+  "Seattle, WA": { lat: 47.6062, lng: -122.3321 },
+  "Kirkland, WA": { lat: 47.6815, lng: -122.2087 },
+  "Bellevue, WA": { lat: 47.6101, lng: -122.2015 },
+  "Redmond, WA": { lat: 47.6740, lng: -122.1215 },
+  "Tacoma, WA": { lat: 47.2529, lng: -122.4443 },
+  "Olympia, WA": { lat: 47.0379, lng: -122.9007 },
+  "Spokane, WA": { lat: 47.6588, lng: -117.4260 },
+  "Vancouver, WA": { lat: 45.6387, lng: -122.6615 },
+  "Everett, WA": { lat: 47.9790, lng: -122.2021 },
+  "Renton, WA": { lat: 47.4829, lng: -122.2171 },
+  // ── Oregon (5 cities) ──
+  "Portland, OR": { lat: 45.5152, lng: -122.6784 },
+  "Salem, OR": { lat: 44.9429, lng: -123.0351 },
+  "Eugene, OR": { lat: 44.0521, lng: -123.0868 },
+  "Beaverton, OR": { lat: 45.4871, lng: -122.8037 },
+  "Hillsboro, OR": { lat: 45.5229, lng: -122.9898 },
+  // ── New York (8 cities) ──
+  "New York, NY": { lat: 40.7128, lng: -74.0060 },
+  "Brooklyn, NY": { lat: 40.6782, lng: -73.9442 },
+  "Queens, NY": { lat: 40.7282, lng: -73.7949 },
+  "Bronx, NY": { lat: 40.8448, lng: -73.8648 },
+  "Staten Island, NY": { lat: 40.5795, lng: -74.1502 },
+  "Albany, NY": { lat: 42.6526, lng: -73.7562 },
+  "Buffalo, NY": { lat: 42.8864, lng: -78.8784 },
+  "Rochester, NY": { lat: 43.1566, lng: -77.6088 },
+  // ── Additional CA cities for Google/KP ──
+  "Mountain View, CA": { lat: 37.3861, lng: -122.0839 },
+  "San Jose, CA": { lat: 37.3382, lng: -121.8863 },
+  "Sunnyvale, CA": { lat: 37.3688, lng: -122.0363 },
+  "Palo Alto, CA": { lat: 37.4419, lng: -122.1430 },
+  "San Bruno, CA": { lat: 37.6305, lng: -122.4111 },
+  "Santa Monica, CA": { lat: 34.0195, lng: -118.4912 },
+  "Redwood City, CA": { lat: 37.4852, lng: -122.2364 },
+  "Santa Clara, CA": { lat: 37.3541, lng: -121.9552 },
+  "Walnut Creek, CA": { lat: 37.9101, lng: -122.0652 },
 }
 
 async function main() {
@@ -669,8 +705,232 @@ async function seedV2() {
   console.log(`Created ${storageAssets.length} dispositions`)
 }
 
+// --- V3 SEED DATA: Additional Clients ---
+async function seedV3() {
+  const org = await prisma.organization.findFirst()
+  if (!org) { console.log("Skipping V3 seed - no organization found"); return }
+
+  const existingGoogle = await prisma.client.findUnique({ where: { customerKey: "GOOG" } })
+  if (existingGoogle) { console.log("V3 clients already exist, skipping"); return }
+
+  // Get partners by state
+  const allPartners = await prisma.partner.findMany()
+  const partnersByState: Record<string, string> = {}
+  for (const p of allPartners) {
+    for (const s of p.states) {
+      partnersByState[s] = p.id
+    }
+  }
+
+  // Users for the new clients
+  const maxUser = await prisma.user.findFirst({ where: { email: "max@corovan.com" } })
+  if (!maxUser) return
+
+  // ── Google (GOOG) ──
+  const googleClient = await prisma.client.create({
+    data: {
+      orgId: org.id,
+      name: "Google",
+      fullName: "Google LLC",
+      fmCompany: "JLL",
+      fmContactName: "Sarah Chen",
+      fmContactEmail: "sarah.chen@jll.com",
+      acctDirector: "Max Schmitz",
+      customerKey: "GOOG",
+      isActive: true,
+    },
+  })
+  await prisma.clientConfig.create({
+    data: {
+      clientId: googleClient.id,
+      isRequestEnabled: true,
+      isRequestClassEnabled: true,
+      isBillingEnabled: true,
+      isNotificationsEnabled: true,
+      isApprovalRequired: true,
+      showPictures: true,
+      useTagNumber: true,
+      rowsPerPage: 100,
+    },
+  })
+  await prisma.clientUser.create({ data: { clientId: googleClient.id, userId: maxUser.id, role: "ACCOUNT_DIRECTOR" } })
+  console.log("Created client: Google")
+
+  // Google locations: CA, WA, NY, TX
+  const googleCities: { city: string; state: string }[] = [
+    // CA - 15 locations
+    ...["Mountain View","San Francisco","San Jose","Sunnyvale","Palo Alto","San Bruno","Los Angeles","Irvine","San Diego","Santa Monica","Redwood City","Fremont","Oakland","Sacramento","Long Beach"]
+      .map(city => ({ city, state: "CA" })),
+    // WA - 10 locations
+    ...["Seattle","Kirkland","Bellevue","Redmond","Tacoma","Olympia","Spokane","Vancouver","Everett","Renton"]
+      .map(city => ({ city, state: "WA" })),
+    // NY - 8 locations
+    ...["New York","Brooklyn","Queens","Bronx","Staten Island","Albany","Buffalo","Rochester"]
+      .map(city => ({ city, state: "NY" })),
+    // TX - 7 locations
+    ...["Austin","Dallas","Houston","San Antonio","Plano","Irving","Fort Worth"]
+      .map(city => ({ city, state: "TX" })),
+  ]
+
+  const googleLocationIds: string[] = []
+  for (let i = 0; i < googleCities.length; i++) {
+    const c = googleCities[i]
+    const coordKey = `${c.city}, ${c.state}`
+    const coords = CITY_COORDS[coordKey] || { lat: 37.4 + Math.random(), lng: -122.0 - Math.random() }
+    const loc = await prisma.location.create({
+      data: {
+        clientId: googleClient.id,
+        partnerId: partnersByState[c.state] || null,
+        name: `Google ${c.city} Office`,
+        city: c.city,
+        state: c.state,
+        code: `GOOG-${String(i + 1).padStart(3, "0")}`,
+        lat: coords.lat,
+        lng: coords.lng,
+        capacity: randInt(50, 300),
+        locationType: i < 4 ? LocationType.PRIMARY : LocationType.BRANCH,
+      },
+    })
+    googleLocationIds.push(loc.id)
+  }
+  console.log(`Created ${googleLocationIds.length} Google locations`)
+
+  // Google assets: 2,000
+  const googleAssets = []
+  let gTagCounter = 200001
+  for (let i = 0; i < 2000; i++) {
+    const ft = pick(FURNITURE_TYPES)
+    const desc = pick(ft.descriptions)
+    const locationId = pick(googleLocationIds)
+    const condition = pick([AssetCondition.EXCELLENT, AssetCondition.EXCELLENT, AssetCondition.GOOD, AssetCondition.GOOD, AssetCondition.GOOD, AssetCondition.FAIR])
+    const status = pick([AssetStatus.IN_STORAGE, AssetStatus.DEPLOYED, AssetStatus.DEPLOYED, AssetStatus.AVAILABLE, AssetStatus.RESERVED])
+    googleAssets.push({
+      clientId: googleClient.id,
+      locationId,
+      tagNumber: `GOOG-${gTagCounter++}`,
+      description: desc,
+      type: ft.type,
+      category: ft.category,
+      manufacturer: ft.manufacturer,
+      primaryMaterial: pick(ft.materials),
+      primaryColor: pick(ft.colors),
+      originalCost: randFloat(200, 3000),
+      currentValue: randFloat(80, 2200),
+      quantity: ft.type === "CHAIR" ? randInt(1, 6) : 1,
+      condition,
+      status,
+      dateReceived: new Date(2021 + randInt(0, 4), randInt(0, 11), randInt(1, 28)),
+    })
+  }
+  for (let i = 0; i < googleAssets.length; i += 500) {
+    await prisma.asset.createMany({ data: googleAssets.slice(i, i + 500) })
+  }
+  console.log("Created 2,000 Google assets")
+
+  // ── Kaiser Permanente (KP) ──
+  const kpClient = await prisma.client.create({
+    data: {
+      orgId: org.id,
+      name: "Kaiser Permanente",
+      fullName: "Kaiser Foundation Health Plan Inc.",
+      fmCompany: "CBRE",
+      fmContactName: "Michael Torres",
+      fmContactEmail: "michael.torres@cbre.com",
+      acctDirector: "Max Schmitz",
+      customerKey: "KP",
+      isActive: true,
+    },
+  })
+  await prisma.clientConfig.create({
+    data: {
+      clientId: kpClient.id,
+      isRequestEnabled: true,
+      isRequestClassEnabled: true,
+      isBillingEnabled: true,
+      isNotificationsEnabled: true,
+      isApprovalRequired: true,
+      showPictures: true,
+      useTagNumber: true,
+      rowsPerPage: 100,
+    },
+  })
+  await prisma.clientUser.create({ data: { clientId: kpClient.id, userId: maxUser.id, role: "ACCOUNT_DIRECTOR" } })
+  console.log("Created client: Kaiser Permanente")
+
+  // KP locations: CA, OR, WA
+  const kpCities: { city: string; state: string }[] = [
+    // CA - 15 locations
+    ...["Oakland","Los Angeles","San Francisco","San Diego","Sacramento","Fresno","Riverside","Fontana","Walnut Creek","Santa Clara","Redwood City","Pasadena","Irvine","San Jose","Bakersfield"]
+      .map(city => ({ city, state: "CA" })),
+    // OR - 5 locations
+    ...["Portland","Salem","Eugene","Beaverton","Hillsboro"]
+      .map(city => ({ city, state: "OR" })),
+    // WA - 5 locations
+    ...["Seattle","Tacoma","Bellevue","Spokane","Vancouver"]
+      .map(city => ({ city, state: "WA" })),
+  ]
+
+  const kpLocationIds: string[] = []
+  for (let i = 0; i < kpCities.length; i++) {
+    const c = kpCities[i]
+    const coordKey = `${c.city}, ${c.state}`
+    const coords = CITY_COORDS[coordKey] || { lat: 37.8 + Math.random() * 0.5, lng: -122.3 + Math.random() * 0.5 }
+    const loc = await prisma.location.create({
+      data: {
+        clientId: kpClient.id,
+        partnerId: partnersByState[c.state] || null,
+        name: `Kaiser ${c.city} Medical Center`,
+        city: c.city,
+        state: c.state,
+        code: `KP-${String(i + 1).padStart(3, "0")}`,
+        lat: coords.lat,
+        lng: coords.lng,
+        capacity: randInt(30, 200),
+        locationType: i < 3 ? LocationType.PRIMARY : LocationType.BRANCH,
+      },
+    })
+    kpLocationIds.push(loc.id)
+  }
+  console.log(`Created ${kpLocationIds.length} Kaiser Permanente locations`)
+
+  // KP assets: 1,500
+  const kpAssets = []
+  let kpTagCounter = 300001
+  for (let i = 0; i < 1500; i++) {
+    const ft = pick(FURNITURE_TYPES)
+    const desc = pick(ft.descriptions)
+    const locationId = pick(kpLocationIds)
+    const condition = pick([AssetCondition.EXCELLENT, AssetCondition.GOOD, AssetCondition.GOOD, AssetCondition.GOOD, AssetCondition.FAIR, AssetCondition.POOR])
+    const status = pick([AssetStatus.IN_STORAGE, AssetStatus.IN_STORAGE, AssetStatus.DEPLOYED, AssetStatus.AVAILABLE])
+    kpAssets.push({
+      clientId: kpClient.id,
+      locationId,
+      tagNumber: `KP-${kpTagCounter++}`,
+      description: desc,
+      type: ft.type,
+      category: ft.category,
+      manufacturer: ft.manufacturer,
+      primaryMaterial: pick(ft.materials),
+      primaryColor: pick(ft.colors),
+      originalCost: randFloat(150, 2500),
+      currentValue: randFloat(40, 1600),
+      quantity: ft.type === "CHAIR" ? randInt(1, 4) : 1,
+      condition,
+      status,
+      dateReceived: new Date(2020 + randInt(0, 5), randInt(0, 11), randInt(1, 28)),
+    })
+  }
+  for (let i = 0; i < kpAssets.length; i += 500) {
+    await prisma.asset.createMany({ data: kpAssets.slice(i, i + 500) })
+  }
+  console.log("Created 1,500 Kaiser Permanente assets")
+
+  console.log("\n✅ V3 Seed complete - Multi-client data added")
+}
+
 main()
   .then(() => seedV2())
+  .then(() => seedV3())
   .catch((e) => {
     console.error(e)
     process.exit(1)

@@ -19,6 +19,7 @@ import {
   Leaf,
 } from "lucide-react"
 import { useState } from "react"
+import { useClientContext } from "@/lib/client-context"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -36,6 +37,7 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const { client } = useClientContext()
 
   return (
     <aside
@@ -65,20 +67,16 @@ export function Sidebar() {
       </div>
 
       {/* Client Context */}
-      {!collapsed && (
+      {!collapsed && client && (
         <div className="mx-3 mt-3 rounded-lg bg-white/5 border border-white/10 p-2.5">
           <div className="flex items-center gap-2">
             <div className="flex h-7 w-7 items-center justify-center rounded bg-blue-500/20 text-blue-300 text-[10px] font-bold">
-              AAA
+              {client.customerKey.slice(0, 3)}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-medium text-gray-200 truncate">AAA Insurance</div>
-              <div className="text-[10px] text-gray-400 truncate">Cushman & Wakefield</div>
+              <div className="text-xs font-medium text-gray-200 truncate">{client.fullName || client.name}</div>
+              {client.fmCompany && <div className="text-[10px] text-gray-400 truncate">{client.fmCompany}</div>}
             </div>
-          </div>
-          <div className="flex items-center gap-1 mt-1.5 text-[9px] text-gray-500">
-            <Building2 className="h-2.5 w-2.5" />
-            <span>CA + TX + MO + AZ + NV + CO</span>
           </div>
         </div>
       )}

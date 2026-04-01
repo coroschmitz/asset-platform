@@ -1,11 +1,15 @@
 import { router, publicProcedure } from "./trpc"
+import { z } from "zod/v4"
 
 export const billingRouter = router({
-  getWorkOrders: publicProcedure.query(async ({ ctx }) => {
+  getWorkOrders: publicProcedure
+    .input(z.object({ clientId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+    const where: any = { status: "COMPLETED" }
+    if (input?.clientId) where.clientId = input.clientId
+
     const workOrders = await ctx.prisma.workOrder.findMany({
-      where: {
-        status: "COMPLETED",
-      },
+      where,
       include: {
         client: { select: { name: true } },
         partner: { select: { name: true } },

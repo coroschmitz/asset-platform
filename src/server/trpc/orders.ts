@@ -8,6 +8,7 @@ export const ordersRouter = router({
       z.object({
         page: z.number().default(1),
         pageSize: z.number().default(20),
+        clientId: z.string().optional(),
         status: z.string().optional(),
         search: z.string().optional(),
         sortBy: z.string().optional(),
@@ -16,6 +17,7 @@ export const ordersRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const where: Prisma.WorkOrderWhereInput = {}
+      if (input.clientId) where.clientId = input.clientId
       if (input.status && input.status !== "ALL") {
         where.status = input.status as any
       }
@@ -51,9 +53,12 @@ export const ordersRouter = router({
       return { items, total, page: input.page, pageSize: input.pageSize, totalPages: Math.ceil(total / input.pageSize) }
     }),
 
-  getStatusCounts: publicProcedure.query(async ({ ctx }) => {
+  getStatusCounts: publicProcedure
+    .input(z.object({ clientId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
     const result = await ctx.prisma.workOrder.groupBy({
       by: ["status"],
+      where: input?.clientId ? { clientId: input.clientId } : {},
       _count: { id: true },
     })
     const counts: Record<string, number> = { ALL: 0 }
