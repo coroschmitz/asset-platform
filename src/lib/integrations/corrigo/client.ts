@@ -140,7 +140,7 @@ export class CorrigoClient {
         source: "corrigo",
         direction: "outbound",
         event: `${method} ${path}`,
-        payload: { method, url, body: body || null } as Record<string, unknown>,
+        payload: { method, url, body: body || null } as unknown as import("@prisma/client").Prisma.InputJsonValue,
         status: "sending",
       },
     });
@@ -189,12 +189,12 @@ export class CorrigoClient {
         where: { id: logEntry.id },
         data: {
           status: "success",
-          payload: {
+          payload: JSON.parse(JSON.stringify({
             method,
             url,
             body: body || null,
             response: responseData,
-          } as Record<string, unknown>,
+          })),
         },
       });
 

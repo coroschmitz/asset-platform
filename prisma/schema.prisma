@@ -43,6 +43,7 @@ model Client {
   fmConfigs      FmPlatformConfig[]
   corrigoConfig  CorrigoConfig?
   sustainabilityProjects SustainabilityProject[]
+  approvalRules  ApprovalRule[]
 }
 
 model ClientConfig {
@@ -361,10 +362,11 @@ model User {
   avatarUrl   String?
   isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
-  workOrders    WorkOrder[]
-  logs          ActivityLog[]
-  attachments   Attachment[]
-  approvalSteps ApprovalStep[]
+  workOrders         WorkOrder[]
+  logs               ActivityLog[]
+  attachments        Attachment[]
+  approvalRules      ApprovalRule[]  @relation("ApprovalRuleApprover")
+  approvalSteps      ApprovalStep[]  @relation("ApprovalStepApprover")
 }
 
 enum UserRole {
@@ -501,27 +503,33 @@ model Disposition {
 // ─── APPROVAL WORKFLOW ───
 
 model ApprovalRule {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
   clientId        String
+  client          Client        @relation(fields: [clientId], references: [id])
+  name            String        @default("")
   triggerField    String
   triggerOperator String
   triggerValue    String
   approverUserId  String
-  sortOrder       Int      @default(0)
-  isActive        Boolean  @default(true)
+  approverUser    User          @relation("ApprovalRuleApprover", fields: [approverUserId], references: [id])
+  approverRole    String?
+  sortOrder       Int           @default(0)
+  isActive        Boolean       @default(true)
+  steps           ApprovalStep[]
 }
 
 model ApprovalStep {
-  id              String    @id @default(cuid())
+  id              String        @id @default(cuid())
   workOrderId     String
-  workOrder       WorkOrder @relation(fields: [workOrderId], references: [id])
-  ruleId          String
+  workOrder       WorkOrder     @relation(fields: [workOrderId], references: [id])
+  ruleId          String?
+  rule            ApprovalRule? @relation(fields: [ruleId], references: [id])
   approverUserId  String
-  approver        User      @relation(fields: [approverUserId], references: [id])
-  status          String    @default("pending")
+  approver        User          @relation("ApprovalStepApprover", fields: [approverUserId], references: [id])
+  status          String        @default("pending")
   notes           String?
   decidedAt       DateTime?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime      @default(now())
 }
 
 // ─── SUSTAINABILITY & ESG ───
