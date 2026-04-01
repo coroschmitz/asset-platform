@@ -43,36 +43,63 @@ const SUGGESTIONS: Suggestion[] = [
 const MOCK_CONVERSATIONS: ChatMessage[] = [
   {
     role: "user",
-    content: "Which assets have been in storage more than 12 months and what should we do with them?",
-    timestamp: new Date(Date.now() - 300000),
+    content: "Give me a summary of the OCA63814-1 CoroTrak move and flag any issues.",
+    timestamp: new Date(Date.now() - 600000),
   },
   {
     role: "assistant",
-    content: `Based on analysis of your inventory data, I've identified **847 assets** that have been in storage for over 12 months across all AAA locations. Here's my breakdown and recommendations:
+    content: `Here's my analysis of **Work Order OCA63814-1** — the AAA LAX campus move:
 
-**Storage Duration Distribution:**
-- 12-18 months: 412 assets ($185K estimated value)
-- 18-24 months: 268 assets ($92K estimated value)
-- 24+ months: 167 assets ($34K estimated value)
+**Overview:**
+- **336 person moves** across LAX2105 and LAX2126 buildings
+- **3,360 total work items** (avg 10 items per person)
+- Imported March 15, 2026 — status: COMPLETED
 
-**Top Categories in Long-term Storage:**
-1. **Panels & Workstations** (340 items) — Most are Steelcase Answer series. Recommend liquidation via auction — these have strong secondary market demand. Estimated recovery: $45K.
-2. **Task Chairs** (215 items) — Mix of Herman Miller Aeron and Steelcase Leap. Good condition items should be redeployed to branches needing refreshes. Estimated savings vs. new: $128K.
-3. **Filing Cabinets** (180 items) — Low resale value. Recommend donation to local nonprofits for tax benefit. Estimated deduction: $12K.
-4. **Conference Tables** (72 items) — High-value items. Cross-reference with upcoming projects — the LA HQ Floor 5 Refresh could use 8 of these.
-5. **Miscellaneous** (40 items) — Assess individually.
+**Move Breakdown:**
+- **Inter-building (LAX2105 → LAX2126):** 203 moves (60.4%) — This is the bulk of the project. Floor 03 consolidation from the old building into the new tower.
+- **Intra-building (LAX2126 reshuffles):** 87 moves (25.9%) — Internal floor reassignments within LAX2126.
+- **To Storage:** 46 moves (13.7%) — Excess furniture going to warehouse. Higher than typical (10% benchmark).
 
-**Recommended Actions:**
-- ✅ **Redeploy 215 chairs** to Costa Mesa and Coppell branches (saves $128K vs. procurement)
-- 💰 **Liquidate 340 panels** via Corovan marketplace ($45K recovery)
-- 🎁 **Donate 180 filing cabinets** to Habitat for Humanity ($12K tax benefit)
-- 📋 **Hold 72 conference tables** for PRJ-2026-002 (LA HQ Floor 5 Refresh)
-- 📊 **Monthly storage cost being saved:** $21,175/month
+**Flagged Issues:**
+1. **Storage ratio above benchmark.** 13.7% vs. 10% target. 46 moves to storage means ~460 work items warehoused. At $25/item/month, that's **$11,500/month in ongoing storage costs.** Recommend scheduling a disposition review within 30 days.
+2. **Floor 05.A has a net loss of 12 people** — origin count (36) significantly exceeds destination count (48 arrivals vs. 36 departures + 18 to storage). Verify space planning assumptions.
+3. **RFID verification incomplete.** Only 198 of 336 moves (58.9%) were RFID-verified. Floors 02.D and 05.C have the lowest verification rates. Recommend a post-move scan sweep.
+4. **5 employees show duplicate records** — employees 695463, 751011, 704912 each appear in both inter- and intra-building datasets. Cross-reference with HR to confirm these are legitimate sequential moves vs. data entry errors.
 
-**Net Impact:** $206K in value recovered/saved, 87.3% waste diversion rate maintained.
+**Completion Status:**
+- Completed: 203 (60.4%)
+- In Progress: 48 (14.3%)
+- Pending: 85 (25.3%)
 
-Want me to generate work orders for any of these actions?`,
-    timestamp: new Date(Date.now() - 240000),
+Want me to generate a disposition review work order for the 46 storage moves, or schedule an RFID verification sweep?`,
+    timestamp: new Date(Date.now() - 540000),
+  },
+  {
+    role: "user",
+    content: "Compare partner performance across all regions for Q1 2026",
+    timestamp: new Date(Date.now() - 420000),
+  },
+  {
+    role: "assistant",
+    content: `**Q1 2026 Partner Performance Scorecard:**
+
+| Partner | Region | Orders | On-Time % | Avg Response | Quality | Overall |
+|---------|--------|--------|-----------|-------------|---------|---------|
+| **Corovan** | CA | 8 | 99.2% | 1.2h | 4.8/5 | **4.9/5** |
+| **Rocky Mountain** | CO | 2 | 98.5% | 1.8h | 4.6/5 | **4.5/5** |
+| **Dodge Moving** | MO | 1 | 98.1% | 2.1h | 4.4/5 | **4.3/5** |
+| **Armstrong** | TX | 1 | 97.5% | 2.5h | 4.2/5 | **4.1/5** |
+| **Silver State** | NV | 0 | 97.2% | 2.8h | 4.0/5 | **3.9/5** |
+| **Desert Moving** | AZ | 1 | 96.8% | 3.1h | 3.9/5 | **3.8/5** |
+
+**Key Findings:**
+- **Corovan (CA)** continues to lead across all metrics — sub-2-hour response, near-perfect on-time delivery. Handling 62% of total volume.
+- **Desert Moving (AZ)** shows the lowest scores. The Phoenix Branch Relocation (WO-2026-0010) had a cost overrun of $625 above NTE. Recommend a performance review meeting.
+- **Armstrong (TX)** response times have improved from 3.4h → 2.5h quarter-over-quarter after the new dispatch system rollout.
+- **Silver State (NV)** and **Dodge (MO)** have low volume making statistical comparison difficult.
+
+**Recommendation:** Consider expanding Corovan's coverage to border AZ markets (they already serve Riverside/San Bernardino) to improve Phoenix-area SLAs.`,
+    timestamp: new Date(Date.now() - 360000),
   },
 ]
 
