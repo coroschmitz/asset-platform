@@ -236,6 +236,17 @@ model WorkOrder {
   requestDate      DateTime        @default(now())
   scheduledDate    DateTime?
   completedDate    DateTime?
+  respondedAt      DateTime?
+  checkedInAt      DateTime?
+  checkedInLat     Float?
+  checkedInLng     Float?
+  checkedOutAt     DateTime?
+  slaResponseDue   DateTime?
+  slaCompletionDue DateTime?
+  nteAmount        Float?
+  completionComments String?
+  hoursWorked      Float?
+  materialCost     Float?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   items            WorkOrderItem[]
