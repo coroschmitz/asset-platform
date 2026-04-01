@@ -76,7 +76,7 @@ export async function GET(
 
     const qualityPct = scorecard?.qualityScore || onTimeDeliveryRate;
     const commPct = scorecard?.communicationScore || (responseCount > 0 ? (onTimeResponse / responseCount) * 100 : 100);
-    const custSat = scorecard?.customerSatisfaction || onTimeDeliveryRate;
+    const custSat = scorecard?.overallScore || onTimeDeliveryRate;
 
     const cbreRating = {
       timeOfDelivery: toStarRating(onTimeDeliveryRate),
