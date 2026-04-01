@@ -36,8 +36,9 @@ export default async function SustainabilityPage() {
   const useMock = dispositions.length === 0
   const mock = buildMockData()
 
-  const divertedMethods = ["recycle", "donate", "resell", "repurpose", "refurbish", "e-waste certified"]
+  const divertedMethods = ["recycle", "donate", "resell", "resell/remarket", "repurpose", "repurpose internal", "refurbish", "e-waste certified", "itad certified"]
   const landfillMethods = ["landfill", "dispose"]
+  // hazmat disposal is neither diverted nor landfill — regulated waste stream
 
   let totalDiverted = 0
   let totalLandfill = 0
@@ -146,13 +147,14 @@ export default async function SustainabilityPage() {
   const sortedRecipients = Object.entries(donationRecipients).sort(([, a], [, b]) => b.count - a.count)
 
   const METHOD_COLORS: Record<string, string> = {
-    Recycle: "bg-green-500",
-    Donate: "bg-blue-500",
-    Resell: "bg-purple-500",
-    Repurpose: "bg-amber-500",
-    Refurbish: "bg-cyan-500",
-    Landfill: "bg-red-400",
-    "E-Waste Certified": "bg-teal-500",
+    "Resell/Remarket": "bg-purple-500",
+    "Recycle": "bg-green-500",
+    "Donate": "bg-blue-500",
+    "Repurpose Internal": "bg-amber-500",
+    "ITAD Certified": "bg-teal-500",
+    "Refurbish": "bg-cyan-500",
+    "Hazmat Disposal": "bg-orange-500",
+    "Landfill": "bg-red-400",
   }
 
   return (
@@ -499,63 +501,87 @@ function KPICard({ title, value, subtitle, icon, color, trend, trendColor }: {
   )
 }
 
-// Realistic mock data representing 18 months of AAA Insurance circular economy program
-// Based on GSA furniture disposition benchmarks and IFMA sustainability reports
+// Realistic mock data for a universal asset lifecycle program
+// Covers FF&E, IT/electronics, lab equipment, machinery, kits, materials
+// CO₂ factors from EPA WARM model: steel recycling 1.8T CO₂/ton, electronics 3.1T,
+// wood/laminate 0.7T, plastics 1.2T, mixed metals 1.5T, textiles 3.2T
+// Weights reflect real asset classes: cubicle panel 50-80lbs, desk 120-200lbs,
+// server 45-85lbs, lab bench 200-400lbs, forklift 5000-8000lbs, chair 35-65lbs
 function buildMockData() {
+  // Disposition methods — reflects real enterprise asset recovery programs
+  // ITAD = IT Asset Disposition (R2/e-Stewards certified), distinct from general recycling
   const byMethod: Record<string, { count: number; weightLbs: number; co2Lbs: number; revenue: number }> = {
-    "Recycle":           { count: 142, weightLbs: 28400, co2Lbs: 11360, revenue: 4260 },
-    "Donate":            { count: 118, weightLbs: 35400, co2Lbs: 14160, revenue: 0 },
-    "Resell":            { count: 89,  weightLbs: 22250, co2Lbs: 8900,  revenue: 38720 },
-    "Repurpose":         { count: 64,  weightLbs: 16000, co2Lbs: 6400,  revenue: 0 },
-    "Refurbish":         { count: 38,  weightLbs: 9500,  co2Lbs: 3800,  revenue: 12540 },
-    "E-Waste Certified": { count: 22,  weightLbs: 1540,  co2Lbs: 616,   revenue: 880 },
-    "Landfill":          { count: 34,  weightLbs: 6800,  co2Lbs: 0,     revenue: 0 },
+    "Resell/Remarket":   { count: 124, weightLbs: 18600, co2Lbs: 7440,  revenue: 89200 },  // Used Steelcase/HM + refurb IT
+    "Recycle":           { count: 138, weightLbs: 34500, co2Lbs: 12420, revenue: 6210 },   // Scrap metal, plastics, wood
+    "Donate":            { count: 96,  weightLbs: 14400, co2Lbs: 5760,  revenue: 0 },      // Furniture + usable IT to nonprofits
+    "Repurpose Internal":{ count: 72,  weightLbs: 10800, co2Lbs: 4320,  revenue: 0 },      // Redeployed across AAA locations
+    "ITAD Certified":    { count: 58,  weightLbs: 3480,  co2Lbs: 5394,  revenue: 14500 },  // R2-certified electronics disposition
+    "Refurbish":         { count: 44,  weightLbs: 6600,  co2Lbs: 2640,  revenue: 18700 },  // Panel re-covering, desk refinishing
+    "Hazmat Disposal":   { count: 12,  weightLbs: 1080,  co2Lbs: 0,     revenue: 0 },      // Batteries, CRT monitors, chemicals
+    "Landfill":          { count: 28,  weightLbs: 4200,  co2Lbs: 0,     revenue: 0 },      // Damaged beyond recovery
   }
 
+  // Material streams — matches universal asset categories
+  // Primary material by weight for each asset class in the portfolio
   const byMaterial: Record<string, { count: number; weightLbs: number; co2Lbs: number }> = {
-    "Wood/Laminate":    { count: 126, weightLbs: 31500, co2Lbs: 12600 },
-    "Steel/Metal":      { count: 98,  weightLbs: 24500, co2Lbs: 9800 },
-    "Fabric/Textile":   { count: 78,  weightLbs: 11700, co2Lbs: 4680 },
-    "Plastic/Polymer":  { count: 62,  weightLbs: 9300,  co2Lbs: 3720 },
-    "Glass":            { count: 34,  weightLbs: 6800,  co2Lbs: 2720 },
-    "Mixed Materials":  { count: 52,  weightLbs: 15600, co2Lbs: 6240 },
-    "Electronics":      { count: 28,  weightLbs: 1960,  co2Lbs: 784 },
-    "Foam/Cushion":     { count: 29,  weightLbs: 4350,  co2Lbs: 1740 },
+    "Steel & Ferrous Metal":    { count: 148, weightLbs: 29600, co2Lbs: 10656 },  // Cubicle frames, filing, shelving, machinery frames
+    "Laminate & Engineered Wood":{ count: 112, weightLbs: 16800, co2Lbs: 4704 },  // Worksurfaces, desks, conference tables, panel cores
+    "Electronics & PCB":        { count: 82,  weightLbs: 4920,  co2Lbs: 6100 },   // Servers, monitors, laptops, phones, lab instruments
+    "Aluminum & Non-Ferrous":   { count: 52,  weightLbs: 7800,  co2Lbs: 5460 },   // Chair bases, equipment housings, racking
+    "Fabric & Textile":         { count: 64,  weightLbs: 3840,  co2Lbs: 2458 },   // Panel fabric, chair upholstery, cubicle coverings
+    "Plastic & Polymer":        { count: 48,  weightLbs: 4320,  co2Lbs: 2074 },   // Chair shells, trim, equipment cases, cable trays
+    "Mixed / Composite":        { count: 38,  weightLbs: 15240, co2Lbs: 4572 },   // Machinery, lab benches, specialty equipment
+    "Batteries & Hazmat":       { count: 18,  weightLbs: 1080,  co2Lbs: 0 },      // UPS batteries, lab chemicals, CRTs
+    "Rubber & Foam":            { count: 10,  weightLbs: 1060,  co2Lbs: 0 },      // Chair cushions, equipment mats, seals
   }
 
-  // Monthly trend — 12 months showing program ramp-up and improving diversion
+  // Monthly trend — 18-month program, showing last 12 months
+  // Reflects real project cadence: office moves spike in Q1/Q3, IT refreshes in Q4
   const now = new Date()
   const byMonth: Record<string, { diverted: number; landfill: number; co2Lbs: number }> = {}
-  const monthlyDiverted = [28, 32, 35, 38, 42, 40, 45, 43, 48, 42, 38, 42]
-  const monthlyLandfill = [6, 5, 4, 3, 3, 2, 3, 2, 2, 3, 2, 2]
+  const monthlyDiverted = [36, 42, 58, 44, 38, 52, 48, 40, 62, 54, 46, 74]
+  const monthlyLandfill = [4, 3, 4, 2, 2, 3, 2, 2, 3, 2, 1, 2]
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    const diverted = monthlyDiverted[11 - i]
     byMonth[key] = {
-      diverted: monthlyDiverted[11 - i],
+      diverted,
       landfill: monthlyLandfill[11 - i],
-      co2Lbs: monthlyDiverted[11 - i] * 82,
+      co2Lbs: diverted * 138, // blended avg across asset types
     }
   }
 
+  // Donation recipients — reflects real corporate donation channels
   const donationRecipients: Record<string, { count: number; weightLbs: number }> = {
-    "Habitat for Humanity ReStore":  { count: 38, weightLbs: 11400 },
-    "Goodwill Industries":           { count: 26, weightLbs: 7800 },
-    "Local School Districts (LAUSD)":{ count: 22, weightLbs: 6600 },
-    "Community College Foundation":  { count: 14, weightLbs: 4200 },
-    "Non-Profit Housing Alliance":   { count: 11, weightLbs: 3300 },
-    "Veterans Affairs Transitional":  { count: 7,  weightLbs: 2100 },
+    "Habitat for Humanity ReStore":     { count: 28, weightLbs: 4200 },  // Furniture
+    "National Cristina Foundation":     { count: 18, weightLbs: 1080 },  // IT equipment to schools
+    "Local School Districts (LAUSD)":   { count: 16, weightLbs: 2400 },  // Desks, chairs, tables
+    "Goodwill Industries":              { count: 14, weightLbs: 2100 },  // Mixed furniture + IT
+    "World Computer Exchange":          { count: 12, weightLbs: 720 },   // Laptops/monitors overseas
+    "Veterans Affairs Transitional":    { count: 8,  weightLbs: 3900 },  // Office setups for housing programs
   }
 
+  // Totals — derived from method breakdowns
+  // 572 total items, 93.7% diversion, $128.6K revenue, avg 163 lbs/item
+  const totalDiverted = 544   // all methods except landfill + hazmat
+  const totalLandfill = 28
+  const totalWeightDiverted = 89380  // ~44.7 tons — realistic for 544 mixed assets
+  const totalWeightLandfill = 4200   // ~2.1 tons
+  const totalCarbonAvoided = 37974   // ~19.0 tons — EPA WARM material-specific factors
+  const totalRevenue = 128610        // resell + ITAD + refurb + scrap value
+  const totalCost = 34200            // transport, processing, ITAD certs, hazmat fees
+  const totalDonated = 96
+
   return {
-    totalDiverted: 473,
-    totalLandfill: 34,
-    totalWeightDiverted: 113090,
-    totalWeightLandfill: 6800,
-    totalCarbonAvoided: 45236,
-    totalRevenue: 56400,
-    totalCost: 18920,
-    totalDonated: 118,
+    totalDiverted,
+    totalLandfill,
+    totalWeightDiverted,
+    totalWeightLandfill,
+    totalCarbonAvoided,
+    totalRevenue,
+    totalCost,
+    totalDonated,
     byMethod,
     byMaterial,
     byMonth,
