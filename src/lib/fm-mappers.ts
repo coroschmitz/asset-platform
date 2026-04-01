@@ -1,86 +1,120 @@
-// FM platform webhook payload mappers
-// Each returns a partial WorkOrder-create-compatible object
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-const CORRIGO_PRIORITY: Record<number, string> = { 1: "URGENT", 2: "HIGH", 3: "HIGH", 4: "MEDIUM", 5: "LOW" }
-const SNOW_PRIORITY: Record<number, string> = { 1: "URGENT", 2: "HIGH", 3: "MEDIUM", 4: "LOW" }
-const CBRE_PRIORITY: Record<string, string> = { Critical: "URGENT", High: "HIGH", Normal: "MEDIUM", Low: "LOW" }
-const CUSHMAN_PRIORITY: Record<string, string> = { Emergency: "URGENT", Urgent: "HIGH", Standard: "MEDIUM", Low: "LOW" }
-
-export function corrigoMapper(payload: Record<string, unknown>) {
-  const wo = payload.WorkOrder as Record<string, unknown> | undefined
-  if (!wo) throw new Error("Missing WorkOrder object in Corrigo payload")
-
-  const num = wo.Number as string | undefined
-  if (!num) throw new Error("Missing WorkOrder.Number in Corrigo payload")
-
-  const space = wo.Space as Record<string, unknown> | undefined
-  const customFields = wo.CustomFields as Record<string, unknown> | undefined
-
-  return {
-    orderNumber: `CRG-${num}`,
-    description: (wo.Description as string) || undefined,
-    priority: CORRIGO_PRIORITY[(wo.PriorityId as number) ?? 4] || "MEDIUM",
-    fromDetail: (space?.Address as string) || undefined,
-    locationCity: (space?.City as string) || undefined,
-    locationState: (space?.State as string) || undefined,
-    poNumber: (customFields?.PurchaseOrder as string) || undefined,
-    costCenter: (customFields?.CostCenter as string) || undefined,
-    requestType: "FM_WORK_ORDER",
-    externalSource: "corrigo",
+function mapCorrigoPriority(priorityId: number): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
+  switch (priorityId) {
+    case 1: return "URGENT";
+    case 2: return "HIGH";
+    case 3: return "MEDIUM";
+    case 4: return "LOW";
+    case 5: return "LOW";
+    default: return "MEDIUM";
   }
 }
 
-export function servicenowMapper(payload: Record<string, unknown>) {
-  const num = payload.number as string | undefined
-  if (!num) throw new Error("Missing number in ServiceNow payload")
-
-  const location = payload.location as Record<string, unknown> | undefined
-  const variables = payload.variables as Record<string, unknown> | undefined
-
-  return {
-    orderNumber: `SNOW-${num}`,
-    jobName: (payload.short_description as string) || undefined,
-    description: (payload.description as string) || undefined,
-    priority: SNOW_PRIORITY[(payload.priority as number) ?? 3] || "MEDIUM",
-    fromDetail: (location?.name as string) || undefined,
-    locationCity: (location?.city as string) || undefined,
-    locationState: (location?.state as string) || undefined,
-    poNumber: (variables?.po_number as string) || undefined,
-    costCenter: (variables?.cost_center as string) || undefined,
-    requestType: "FM_WORK_ORDER",
-    externalSource: "servicenow",
+function mapServiceNowPriority(priority: number): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
+  switch (priority) {
+    case 1: return "URGENT";
+    case 2: return "HIGH";
+    case 3: return "MEDIUM";
+    case 4: return "LOW";
+    default: return "MEDIUM";
   }
 }
 
-export function cbreNexusMapper(payload: Record<string, unknown>) {
-  const woId = payload.workOrderId as string | undefined
-  if (!woId) throw new Error("Missing workOrderId in CBRE Nexus payload")
-
-  return {
-    orderNumber: `CBRE-${woId}`,
-    description: (payload.description as string) || undefined,
-    priority: CBRE_PRIORITY[(payload.priority as string) ?? "Normal"] || "MEDIUM",
-    locationCode: (payload.siteId as string) || undefined,
-    fromDetail: (payload.siteName as string) || undefined,
-    glCode: (payload.costCode as string) || undefined,
-    requestType: "FM_WORK_ORDER",
-    externalSource: "cbre",
+function mapCbrePriority(priority: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
+  switch (priority?.toLowerCase()) {
+    case "critical": return "URGENT";
+    case "high": return "HIGH";
+    case "normal": return "MEDIUM";
+    case "low": return "LOW";
+    default: return "MEDIUM";
   }
 }
 
-export function cushmanMapper(payload: Record<string, unknown>) {
-  const reqId = payload.requestId as string | undefined
-  if (!reqId) throw new Error("Missing requestId in Cushman payload")
+function mapCushmanPriority(urgency: string): "LOW" | "MEDIUM" | "HIGH" | "URGENT" {
+  switch (urgency?.toLowerCase()) {
+    case "emergency": return "URGENT";
+    case "urgent": return "HIGH";
+    case "standard": return "MEDIUM";
+    case "low": return "LOW";
+    default: return "MEDIUM";
+  }
+}
+
+export function corrigoMapper(payload: any) {
+  const wo = payload.WorkOrder || payload;
+  const customFields = wo.CustomFields || [];
+  const poField = customFields.find((f: any) => f.Name === "PO" || f.Name === "PONumber" || f.Name === "PurchaseOrder");
+  const ccField = customFields.find((f: any) => f.Name === "CostCenter" || f.Name === "Cost Center");
 
   return {
-    orderNumber: `CW-${reqId}`,
-    jobName: (payload.summary as string) || undefined,
-    description: (payload.details as string) || undefined,
-    priority: CUSHMAN_PRIORITY[(payload.urgency as string) ?? "Standard"] || "MEDIUM",
-    locationCode: (payload.buildingCode as string) || undefined,
-    fromDetail: (payload.buildingName as string) || undefined,
-    poNumber: (payload.billingReference as string) || undefined,
-    requestType: "FM_WORK_ORDER",
-    externalSource: "cushman",
-  }
+    externalId: String(wo.Id),
+    externalSource: "corrigo" as const,
+    orderNumber: `CRG-${wo.Number || wo.Id}`,
+    description: wo.Description || "",
+    priority: mapCorrigoPriority(wo.PriorityId || 3),
+    scheduledDate: wo.DtScheduled ? new Date(wo.DtScheduled) : undefined,
+    slaCompletionDue: wo.DtDue ? new Date(wo.DtDue) : undefined,
+    nteAmount: wo.NteTotal ? Number(wo.NteTotal) : undefined,
+    fromDetail: wo.Space?.Name || undefined,
+    poNumber: poField?.Value || undefined,
+    costCenter: ccField?.Value || undefined,
+    _locationHints: {
+      city: wo.Space?.Address?.City,
+      state: wo.Space?.Address?.State,
+    },
+  };
+}
+
+export function servicenowMapper(payload: any) {
+  const result = payload.result || payload;
+  return {
+    externalId: result.sys_id || result.number,
+    externalSource: "servicenow" as const,
+    orderNumber: `SNOW-${result.number}`,
+    jobName: result.short_description || "",
+    description: result.description || "",
+    priority: mapServiceNowPriority(Number(result.priority) || 3),
+    fromDetail: result.location?.display_value || undefined,
+    poNumber: result.u_po_number || undefined,
+    costCenter: result.u_cost_center || undefined,
+    _locationHints: {
+      name: result.location?.display_value,
+    },
+  };
+}
+
+export function cbreNexusMapper(payload: any) {
+  return {
+    externalId: String(payload.workOrderId),
+    externalSource: "cbre" as const,
+    orderNumber: `CBRE-${payload.workOrderId}`,
+    description: payload.description || "",
+    priority: mapCbrePriority(payload.priority || "Normal"),
+    fromDetail: payload.siteName || undefined,
+    glCode: payload.costCode || undefined,
+    nteAmount: payload.nteAmount ? Number(payload.nteAmount) : undefined,
+    _locationHints: {
+      code: payload.siteId,
+      name: payload.siteName,
+    },
+  };
+}
+
+export function cushmanMapper(payload: any) {
+  return {
+    externalId: String(payload.requestId),
+    externalSource: "cushman" as const,
+    orderNumber: `CW-${payload.requestId}`,
+    jobName: payload.summary || "",
+    description: payload.details || "",
+    priority: mapCushmanPriority(payload.urgency || "Standard"),
+    fromDetail: payload.buildingName || undefined,
+    poNumber: payload.billingReference || undefined,
+    nteAmount: payload.nteLimit ? Number(payload.nteLimit) : undefined,
+    _locationHints: {
+      code: payload.buildingCode,
+      name: payload.buildingName,
+    },
+  };
 }

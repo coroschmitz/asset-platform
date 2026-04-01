@@ -243,15 +243,6 @@ model WorkOrder {
   requestDate      DateTime        @default(now())
   scheduledDate    DateTime?
   completedDate    DateTime?
-  actualHours      Float?
-  laborRate        Float?          @default(85.0)
-  materialCost     Float?
-  totalCost        Float?
-  invoiceNumber    String?
-  invoicedAt       DateTime?
-  nteAmount        Float?
-  slaResponseDue   DateTime?
-  slaCompletionDue DateTime?
   respondedAt      DateTime?
   checkedInAt      DateTime?
   checkedInLat     Float?
@@ -259,6 +250,15 @@ model WorkOrder {
   checkedOutAt     DateTime?
   completionComments String?
   hoursWorked      Float?
+  slaResponseDue   DateTime?
+  slaCompletionDue DateTime?
+  nteAmount        Float?
+  actualHours      Float?
+  laborRate        Float?          @default(85.0)
+  materialCost     Float?
+  totalCost        Float?
+  invoiceNumber    String?
+  invoicedAt       DateTime?
   externalId       String?
   externalSource   String?
   createdAt        DateTime        @default(now())
@@ -271,6 +271,7 @@ model WorkOrder {
   @@index([clientId, status])
   @@index([partnerId])
   @@index([orderNumber])
+  @@index([externalId, externalSource])
 }
 
 enum WorkOrderStatus {
@@ -391,6 +392,7 @@ model WebhookLog {
   id          String   @id @default(cuid())
   source      String
   direction   String   @default("inbound")
+  event       String?
   payload     Json
   status      String   @default("received")
   errorMsg    String?
@@ -410,6 +412,7 @@ model FmPlatformConfig {
   apiKey         String?
   webhookSecret  String?
   fieldMapping   Json?
+  settings       Json?
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -432,6 +435,7 @@ model PartnerScorecard {
   qualityScore        Float?
   overallScore        Float?
   cbreStarRating      Float?
+  slaComplianceRate   Float?
   calculatedAt        DateTime @default(now())
   @@unique([partnerId, period])
   @@index([partnerId])
@@ -440,14 +444,19 @@ model PartnerScorecard {
 // ─── DISPOSITIONS ───
 
 model Disposition {
-  id               String   @id @default(cuid())
+  id               String    @id @default(cuid())
   assetId          String
-  asset            Asset    @relation(fields: [assetId], references: [id])
+  asset            Asset     @relation(fields: [assetId], references: [id])
   workOrderId      String?
   method           String
   weightLbs        Float?
   materialType     String?
   carbonAvoidedLbs Float?
   recipientOrg     String?
-  createdAt        DateTime @default(now())
+  revenue          Float?
+  cost             Float?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  @@index([method])
+  @@index([completedAt])
 }

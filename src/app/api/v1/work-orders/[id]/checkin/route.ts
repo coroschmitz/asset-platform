@@ -1,52 +1,63 @@
-import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { validateApiKey } from "@/lib/api-auth";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
-    const body = await request.json()
-    const { gpsLat, gpsLng, notes } = body
-
-    const workOrder = await prisma.workOrder.findUnique({ where: { id } })
-    if (!workOrder) {
-      return NextResponse.json({ error: "Work order not found" }, { status: 404 })
+    const auth = validateApiKey(request);
+    if (!auth.valid) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
     }
 
-    const updated = await prisma.workOrder.update({
+    const { id } = await params;
+    const body = await request.json();
+    const { gpsLat, gpsLng, notes, technicianName } = body;
+
+    if (gpsLat === undefined || gpsLng === undefined) {
+      return NextResponse.json(
+        { success: false, error: "gpsLat and gpsLng are required" },
+        { status: 400 }
+      );
+    }
+
+    const existing = await prisma.workOrder.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ success: false, error: "Work order not found" }, { status: 404 });
+    }
+
+    const now = new Date();
+    const workOrder = await prisma.workOrder.update({
       where: { id },
       data: {
+        checkedInAt: now,
+        checkedInLat: gpsLat,
+        checkedInLng: gpsLng,
         status: "IN_PROGRESS",
-        checkedInAt: new Date(),
-        checkedInLat: gpsLat ?? null,
-        checkedInLng: gpsLng ?? null,
+        respondedAt: existing.respondedAt || now,
       },
-    })
+    });
 
-    if (notes) {
-      await prisma.activityLog.create({
-        data: {
-          workOrderId: id,
-          type: "COMMENT",
-          title: "Check-in note",
-          text: notes,
-        },
-      })
-    }
+    let logText = `Check-in at GPS: ${gpsLat}, ${gpsLng}`;
+    if (technicianName) logText += `. Technician: ${technicianName}`;
+    if (notes) logText += `. Notes: ${notes}`;
 
     await prisma.activityLog.create({
       data: {
         workOrderId: id,
-        type: "STATUS_CHANGE",
-        title: "Checked in – status changed to IN_PROGRESS",
+        type: "ACTIVITY",
+        title: "Technician checked in",
+        text: logText,
       },
-    })
+    });
 
-    return NextResponse.json(updated)
+    return NextResponse.json({ success: true, data: workOrder });
   } catch (error) {
-    console.error("Checkin error:", error)
-    return NextResponse.json({ error: "Failed to check in" }, { status: 500 })
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }

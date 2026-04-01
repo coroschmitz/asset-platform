@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 const JOB_NAMES = [
   "Emergency Desk Deployment",
@@ -8,119 +8,138 @@ const JOB_NAMES = [
   "Lab Equipment Relocation",
   "Conference Room Refresh",
   "Building Decommission Phase 1",
-  "New Hire Workstation Setup",
   "Warehouse Consolidation",
   "Seismic Compliance FF&E Move",
+  "New Hire Workstation Setup",
   "IT Infrastructure Relocation",
-]
+];
 
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]
+function randomItem<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function randomId(prefix: string, digits: number): string {
-  return `${prefix}${String(Math.floor(Math.random() * 10 ** digits)).padStart(digits, "0")}`
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-type Platform = "corrigo" | "servicenow" | "cbre" | "cushman"
-
-function buildPayload(
-  platform: Platform,
-  loc: { name: string; city: string; state: string; code: string },
-  jobName: string
-) {
-  switch (platform) {
-    case "corrigo":
-      return {
-        WorkOrder: {
-          Number: randomId("WO", 7),
-          Description: jobName,
-          PriorityId: pick([1, 2, 3, 4, 5]),
-          Space: { Address: `${loc.name}, ${loc.city}`, City: loc.city, State: loc.state },
-          CustomFields: {
-            PurchaseOrder: randomId("PO-", 6),
-            CostCenter: pick(["CC-1000", "CC-2000", "CC-3000", "CC-4500"]),
-          },
-        },
-      }
-    case "servicenow":
-      return {
-        number: randomId("TASK", 7),
-        short_description: jobName,
-        description: `${jobName} – ${loc.name}, ${loc.city}, ${loc.state}`,
-        priority: pick([1, 2, 3, 4]),
-        location: { name: loc.name, city: loc.city, state: loc.state },
-        variables: {
-          po_number: randomId("PO-", 6),
-          cost_center: pick(["DEPT-100", "DEPT-200", "DEPT-300"]),
-        },
-      }
-    case "cbre":
-      return {
-        workOrderId: randomId("NX-", 8),
-        description: jobName,
-        priority: pick(["Critical", "High", "Normal", "Low"]),
-        siteId: loc.code,
-        siteName: `${loc.name} – ${loc.city}, ${loc.state}`,
-        costCode: pick(["GL-5100", "GL-5200", "GL-5300"]),
-      }
-    case "cushman":
-      return {
-        requestId: randomId("CW", 8),
-        summary: jobName,
-        details: `${jobName} at ${loc.name}, ${loc.city}, ${loc.state}`,
-        urgency: pick(["Emergency", "Urgent", "Standard", "Low"]),
-        buildingCode: loc.code,
-        buildingName: `${loc.name} – ${loc.city}, ${loc.state}`,
-        billingReference: randomId("PO-", 6),
-      }
-  }
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const platform = body.platform as Platform
+    const body = await request.json();
+    const platform = body.platform as string;
+
     if (!["corrigo", "servicenow", "cbre", "cushman"].includes(platform)) {
-      return NextResponse.json({ success: false, error: "Invalid platform. Use: corrigo, servicenow, cbre, cushman" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, error: "Platform must be one of: corrigo, servicenow, cbre, cushman" },
+        { status: 400 }
+      );
     }
 
-    // Get a random location with its client
-    const count = await prisma.location.count({ where: { isActive: true } })
-    const skip = Math.floor(Math.random() * count)
     const location = await prisma.location.findFirst({
       where: { isActive: true },
-      skip,
-      include: { client: true },
-    })
-    if (!location) return NextResponse.json({ success: false, error: "No locations found" }, { status: 500 })
+      orderBy: { createdAt: "asc" },
+      skip: randomInt(0, Math.max(0, (await prisma.location.count()) - 1)),
+    });
 
-    const jobName = pick(JOB_NAMES)
-    const simulatedPayload = buildPayload(platform, {
-      name: location.name,
-      city: location.city,
-      state: location.state,
-      code: location.code,
-    }, jobName)
+    const client = await prisma.client.findFirst({ where: { isActive: true } });
 
-    // Post to the internal webhook endpoint
-    const origin = new URL(request.url).origin
-    const webhookUrl = `${origin}/api/v1/webhooks/${platform}`
-    const webhookRes = await fetch(webhookUrl, {
+    const jobName = randomItem(JOB_NAMES);
+    const woNum = randomInt(100000, 999999);
+
+    let payload: Record<string, unknown>;
+
+    switch (platform) {
+      case "corrigo":
+        payload = {
+          WorkOrder: {
+            Id: woNum,
+            Number: woNum,
+            Description: jobName,
+            PriorityId: randomItem([1, 2, 3, 4]),
+            DtScheduled: new Date(Date.now() + 86400000 * randomInt(1, 14)).toISOString(),
+            DtDue: new Date(Date.now() + 86400000 * randomInt(3, 30)).toISOString(),
+            NteTotal: randomItem([500, 1000, 2500, 5000, 10000]),
+            Space: {
+              Name: location?.name || "Main Office",
+              Address: {
+                City: location?.city || "Los Angeles",
+                State: location?.state || "CA",
+              },
+            },
+            CustomFields: [
+              { Name: "PONumber", Value: `PO-${randomInt(10000, 99999)}` },
+              { Name: "CostCenter", Value: `CC-${randomInt(100, 999)}` },
+            ],
+          },
+        };
+        break;
+      case "servicenow":
+        payload = {
+          result: {
+            sys_id: `sys_${woNum}`,
+            number: `INC${woNum}`,
+            short_description: jobName,
+            description: `${jobName} - Full service furniture move and installation`,
+            priority: String(randomItem([1, 2, 3, 4])),
+            location: { display_value: location?.name || "Corporate HQ" },
+            u_po_number: `PO-${randomInt(10000, 99999)}`,
+            u_cost_center: `CC-${randomInt(100, 999)}`,
+          },
+        };
+        break;
+      case "cbre":
+        payload = {
+          workOrderId: `WO-${woNum}`,
+          description: jobName,
+          priority: randomItem(["Critical", "High", "Normal", "Low"]),
+          siteId: location?.code || "SITE-001",
+          siteName: location?.name || "Corporate Campus",
+          costCode: `GL-${randomInt(1000, 9999)}`,
+          nteAmount: randomItem([500, 1000, 2500, 5000, 10000]),
+        };
+        break;
+      case "cushman":
+        payload = {
+          requestId: `REQ-${woNum}`,
+          summary: jobName,
+          details: `${jobName} - Complete scope including packing, transport, and setup`,
+          urgency: randomItem(["Emergency", "Urgent", "Standard", "Low"]),
+          buildingCode: location?.code || "BLD-001",
+          buildingName: location?.name || "Main Building",
+          billingReference: `PO-${randomInt(10000, 99999)}`,
+          nteLimit: randomItem([500, 1000, 2500, 5000, 10000]),
+        };
+        break;
+      default:
+        payload = {};
+    }
+
+    const baseUrl = request.nextUrl.origin;
+    const webhookUrl = `${baseUrl}/api/v1/webhooks/${platform}`;
+
+    const response = await fetch(webhookUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(simulatedPayload),
-    })
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.COROVAN_API_KEY ? { "x-api-key": process.env.COROVAN_API_KEY } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
 
-    const webhookData = await webhookRes.json()
+    const result = await response.json();
 
     return NextResponse.json({
       success: true,
-      platform,
-      workOrderId: webhookData.workOrderId || null,
-      simulatedPayload,
-    })
-  } catch (e) {
-    return NextResponse.json({ success: false, error: (e as Error).message }, { status: 500 })
+      data: {
+        platform,
+        workOrderId: result.data?.workOrderId,
+        orderNumber: result.data?.orderNumber,
+        simulatedPayload: payload,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }

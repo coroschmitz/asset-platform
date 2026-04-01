@@ -1,98 +1,105 @@
-import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { validateApiKey } from "@/lib/api-auth"
-import { Prisma } from "@prisma/client"
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { validateApiKey } from "@/lib/api-auth";
+import { calculateSLADates } from "@/lib/sla-engine";
 
-export async function GET(request: Request) {
-  const auth = validateApiKey(request)
-  if (!auth.valid) return NextResponse.json({ success: false, error: auth.error }, { status: 401 })
-
+export async function GET(request: NextRequest) {
   try {
-    const url = new URL(request.url)
-    const status = url.searchParams.get("status")
-    const partnerId = url.searchParams.get("partnerId")
-    const clientId = url.searchParams.get("clientId")
-    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"))
-    const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") || "20")))
+    const auth = validateApiKey(request);
+    if (!auth.valid) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
+    }
 
-    const where: Prisma.WorkOrderWhereInput = {}
-    if (status) where.status = status as Prisma.EnumWorkOrderStatusFilter
-    if (partnerId) where.partnerId = partnerId
-    if (clientId) where.clientId = clientId
+    const url = request.nextUrl;
+    const status = url.searchParams.get("status") || undefined;
+    const partnerId = url.searchParams.get("partnerId") || undefined;
+    const clientId = url.searchParams.get("clientId") || undefined;
+    const externalSource = url.searchParams.get("externalSource") || undefined;
+    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize")) || 20));
+
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    if (partnerId) where.partnerId = partnerId;
+    if (clientId) where.clientId = clientId;
+    if (externalSource) where.externalSource = externalSource;
 
     const [items, total] = await Promise.all([
       prisma.workOrder.findMany({
         where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
         include: {
           client: { select: { name: true, fmCompany: true } },
           partner: { select: { name: true, region: true } },
           fromLocation: { select: { name: true, city: true, state: true } },
           toLocation: { select: { name: true, city: true, state: true } },
+          _count: { select: { items: true } },
         },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
       }),
       prisma.workOrder.count({ where }),
-    ])
+    ]);
 
     return NextResponse.json({
       success: true,
-      data: { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
-    })
-  } catch (e) {
-    return NextResponse.json({ success: false, error: (e as Error).message }, { status: 500 })
+      data: {
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(request: Request) {
-  const auth = validateApiKey(request)
-  if (!auth.valid) return NextResponse.json({ success: false, error: auth.error }, { status: 401 })
-
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    const auth = validateApiKey(request);
+    if (!auth.valid) {
+      return NextResponse.json({ success: false, error: auth.error }, { status: 401 });
+    }
 
-    // Look up client
-    const client = await prisma.client.findUnique({ where: { id: body.clientId } })
-    if (!client) return NextResponse.json({ success: false, error: "Client not found" }, { status: 404 })
+    const body = await request.json();
 
-    // Generate orderNumber if not provided
-    let orderNumber = body.orderNumber as string | undefined
-    let sequenceNum: number
-    const lastOrder = await prisma.workOrder.findFirst({
-      where: { clientId: client.id },
+    const lastWo = await prisma.workOrder.findFirst({
       orderBy: { sequenceNum: "desc" },
-    })
-    sequenceNum = (lastOrder?.sequenceNum || 0) + 1
+      select: { sequenceNum: true },
+    });
+    const seq = (lastWo?.sequenceNum || 0) + 1;
+    const orderNumber = body.orderNumber || `WO-${String(seq).padStart(6, "0")}`;
 
-    if (!orderNumber) {
-      orderNumber = `${client.customerKey}-WO-${new Date().getFullYear()}-${String(sequenceNum).padStart(4, "0")}`
-    }
-
-    // Auto-assign partner
-    let partnerId: string | null = body.partnerId || null
+    let partnerId = body.partnerId || undefined;
     if (!partnerId && body.fromLocationId) {
-      const loc = await prisma.location.findUnique({ where: { id: body.fromLocationId } })
-      partnerId = loc?.partnerId || null
-    }
-    if (!partnerId && body.fromLocationId) {
-      const loc = await prisma.location.findUnique({ where: { id: body.fromLocationId } })
-      if (loc) {
-        const partner = await prisma.partner.findFirst({ where: { states: { has: loc.state } } })
-        partnerId = partner?.id || null
+      const location = await prisma.location.findUnique({
+        where: { id: body.fromLocationId },
+        select: { state: true },
+      });
+      if (location) {
+        const partner = await prisma.partner.findFirst({
+          where: { states: { has: location.state }, isActive: true },
+        });
+        if (partner) partnerId = partner.id;
       }
     }
 
-    // Get system user for createdById
-    const createdById = body.createdById || (await prisma.user.findFirst({ orderBy: { createdAt: "asc" } }))?.id
-    if (!createdById) return NextResponse.json({ success: false, error: "No user found for createdById" }, { status: 400 })
+    const now = new Date();
+    const sla = calculateSLADates(body.priority || "MEDIUM", now);
 
     const workOrder = await prisma.workOrder.create({
       data: {
-        clientId: client.id,
-        partnerId,
         orderNumber,
-        sequenceNum,
+        sequenceNum: seq,
+        clientId: body.clientId,
+        partnerId,
+        fromLocationId: body.fromLocationId,
+        toLocationId: body.toLocationId,
         requestType: body.requestType || "MOVE",
         requestCategory: body.requestCategory,
         priority: body.priority || "MEDIUM",
@@ -101,24 +108,23 @@ export async function POST(request: Request) {
         requestedByEmail: body.requestedByEmail,
         onsiteContact: body.onsiteContact,
         onsitePhone: body.onsitePhone,
-        createdById,
+        createdById: body.createdById,
         jobName: body.jobName,
         description: body.description,
-        fromLocationId: body.fromLocationId,
-        toLocationId: body.toLocationId,
         fromDetail: body.fromDetail,
         toDetail: body.toDetail,
         poNumber: body.poNumber,
         costCenter: body.costCenter,
         department: body.department,
         glCode: body.glCode,
-        chargeBack: body.chargeBack,
-        workOrderRef: body.workOrderRef,
-        scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : null,
+        scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : undefined,
         externalId: body.externalId,
         externalSource: body.externalSource,
+        nteAmount: body.nteAmount,
+        slaResponseDue: sla.slaResponseDue,
+        slaCompletionDue: body.slaCompletionDue ? new Date(body.slaCompletionDue) : sla.slaCompletionDue,
       },
-    })
+    });
 
     await prisma.activityLog.create({
       data: {
@@ -127,10 +133,13 @@ export async function POST(request: Request) {
         title: "Work order created",
         text: `Work order ${orderNumber} created via API`,
       },
-    })
+    });
 
-    return NextResponse.json({ success: true, data: workOrder }, { status: 201 })
-  } catch (e) {
-    return NextResponse.json({ success: false, error: (e as Error).message }, { status: 500 })
+    return NextResponse.json({ success: true, data: workOrder }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }

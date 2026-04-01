@@ -1,67 +1,95 @@
-import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { cushmanMapper } from "@/lib/fm-mappers"
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { cushmanMapper } from "@/lib/fm-mappers";
+import { calculateSLADates } from "@/lib/sla-engine";
 
-export async function POST(request: Request) {
-  const body = await request.json()
-  const log = await prisma.webhookLog.create({
-    data: { source: "cushman", direction: "inbound", payload: body },
-  })
-
+export async function POST(request: NextRequest) {
+  let logId: string | undefined;
   try {
-    const mapped = cushmanMapper(body)
-    const client = await prisma.client.findFirst()
-    if (!client) throw new Error("No client found")
+    const payload = await request.json();
 
-    const lastOrder = await prisma.workOrder.findFirst({
-      where: { clientId: client.id },
-      orderBy: { sequenceNum: "desc" },
-    })
-    const seqNum = (lastOrder?.sequenceNum || 0) + 1
+    const log = await prisma.webhookLog.create({
+      data: { source: "cushman", event: "work_order", payload, status: "received" },
+    });
+    logId = log.id;
 
-    let fromLocationId: string | null = null
-    let partnerId: string | null = null
-    if (mapped.locationCode) {
-      const loc = await prisma.location.findFirst({
-        where: { clientId: client.id, code: mapped.locationCode },
-      })
-      if (loc) {
-        fromLocationId = loc.id
-        partnerId = loc.partnerId
-      }
+    const mapped = cushmanMapper(payload);
+    const hints = mapped._locationHints;
+
+    const client = await prisma.client.findFirst({ where: { isActive: true } });
+    if (!client) throw new Error("No active client found");
+
+    let location = null;
+    if (hints.code) {
+      location = await prisma.location.findFirst({
+        where: { clientId: client.id, code: hints.code },
+      });
+    }
+    if (!location && hints.name) {
+      location = await prisma.location.findFirst({
+        where: { clientId: client.id, name: { contains: hints.name, mode: "insensitive" } },
+      });
     }
 
-    const systemUser = await prisma.user.findFirst({ orderBy: { createdAt: "asc" } })
+    let partnerId: string | undefined;
+    if (location?.state) {
+      const partner = await prisma.partner.findFirst({ where: { states: { has: location.state }, isActive: true } });
+      if (partner) partnerId = partner.id;
+    }
 
-    const wo = await prisma.workOrder.create({
+    const lastWo = await prisma.workOrder.findFirst({ orderBy: { sequenceNum: "desc" }, select: { sequenceNum: true } });
+    const seq = (lastWo?.sequenceNum || 0) + 1;
+    const sla = calculateSLADates(mapped.priority, new Date());
+
+    const workOrder = await prisma.workOrder.create({
       data: {
+        orderNumber: mapped.orderNumber,
+        sequenceNum: seq,
         clientId: client.id,
         partnerId,
-        fromLocationId,
-        orderNumber: mapped.orderNumber,
-        sequenceNum: seqNum,
-        requestType: mapped.requestType,
-        priority: mapped.priority as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
-        status: "DRAFT",
-        requestedBy: "Cushman & Wakefield Webhook",
-        createdById: systemUser!.id,
+        fromLocationId: location?.id,
+        requestType: "FM_WORK_ORDER",
+        priority: mapped.priority,
+        status: "APPROVED",
+        requestedBy: "Cushman Webhook",
+        createdById: (await prisma.user.findFirst({ select: { id: true } }))!.id,
         jobName: mapped.jobName,
         description: mapped.description,
         fromDetail: mapped.fromDetail,
-        poNumber: mapped.poNumber,
-        externalId: mapped.orderNumber,
+        externalId: mapped.externalId,
         externalSource: mapped.externalSource,
+        poNumber: mapped.poNumber,
+        nteAmount: mapped.nteAmount,
+        slaResponseDue: sla.slaResponseDue,
+        slaCompletionDue: sla.slaCompletionDue,
       },
-    })
+    });
 
     await prisma.activityLog.create({
-      data: { workOrderId: wo.id, type: "ACTIVITY", title: "Work order created", text: `Created from Cushman webhook: ${mapped.orderNumber}` },
-    })
+      data: {
+        workOrderId: workOrder.id,
+        type: "ACTIVITY",
+        title: "Work order created from Cushman webhook",
+        text: `External ID: ${mapped.externalId}`,
+      },
+    });
 
-    await prisma.webhookLog.update({ where: { id: log.id }, data: { status: "processed", workOrderId: wo.id } })
-    return NextResponse.json({ received: true, workOrderId: wo.id }, { status: 200 })
-  } catch (e) {
-    await prisma.webhookLog.update({ where: { id: log.id }, data: { status: "failed", errorMsg: (e as Error).message } })
-    return NextResponse.json({ received: true, error: (e as Error).message }, { status: 422 })
+    await prisma.webhookLog.update({
+      where: { id: logId },
+      data: { status: "processed", workOrderId: workOrder.id },
+    });
+
+    return NextResponse.json({ success: true, data: { workOrderId: workOrder.id, orderNumber: workOrder.orderNumber } });
+  } catch (error) {
+    if (logId) {
+      await prisma.webhookLog.update({
+        where: { id: logId },
+        data: { status: "failed", errorMsg: error instanceof Error ? error.message : "Unknown error" },
+      }).catch(() => {});
+    }
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 422 }
+    );
   }
 }
