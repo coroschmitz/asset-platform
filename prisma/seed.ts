@@ -1,4 +1,4 @@
-import { PrismaClient, LocationType, AssetCondition, AssetStatus, WorkOrderStatus, Priority, LogType, UserRole } from "@prisma/client"
+import { PrismaClient, LocationType, AssetCondition, AssetStatus, WorkOrderStatus, Priority, LogType, UserRole, AssetClass, RfidEventType, ProjectStatus } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
@@ -216,6 +216,17 @@ const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
 
 async function main() {
   console.log("Seeding database...")
+
+  // Clean existing data (v2 models first)
+  await prisma.coroTrakMove.deleteMany()
+  await prisma.coroTrakImport.deleteMany()
+  await prisma.rfidEvent.deleteMany()
+  await prisma.rfidTagAssignment.deleteMany()
+  await prisma.rfidReader.deleteMany()
+  await prisma.projectDelivery.deleteMany()
+  await prisma.projectMilestone.deleteMany()
+  await prisma.project.deleteMany()
+  await prisma.sustainabilityReport.deleteMany()
 
   // Clean existing data
   await prisma.workOrderItem.deleteMany()
@@ -561,6 +572,171 @@ async function main() {
     }
   }
   console.log("Created", workOrdersData.length, "work orders with items and activity logs")
+
+  // ─── CoroTrak Sample Import ───
+  const aaaClient = await prisma.client.findFirst({ where: { customerKey: 'AAA' } })
+  if (aaaClient) {
+    const coroImport = await prisma.coroTrakImport.create({ data: {
+      clientId: aaaClient.id,
+      workOrderNumber: 'OCA63814-1',
+      fileName: 'WorkOrder_OCA63814-1.xlsx',
+      totalPersonMoves: 336,
+      totalWorkItems: 3360,
+      originBuildings: ['LAX2105', 'LAX2126'],
+      destBuildings: ['LAX2126'],
+      storageCount: 46,
+      interBuildingCount: 203,
+      intraBuildingCount: 133,
+      status: 'COMPLETED',
+    }})
+
+    // Sample moves (20 representative entries)
+    const sampleMoves = [
+      { firstName: 'AARON', lastName: 'ROBLES', employeeNumber: '695463', originLocation: 'LAX2126', originFloor: '05.C', originRoom: '05.C.02E', destLocation: 'LAX2126', destFloor: '05.A', destRoom: '05.A.23B' },
+      { firstName: 'ADAM', lastName: 'HODGSON', employeeNumber: '226986', originLocation: 'LAX2105', originFloor: '03.D', originRoom: '03.D.31D', destLocation: 'LAX2126', destFloor: '03.C', destRoom: '03.C.01D' },
+      { firstName: 'ALEX', lastName: 'POCASANGRE', employeeNumber: '751011', originLocation: 'LAX2126', originFloor: '05.A', originRoom: '05.A.32B', destLocation: 'LAX2126', destFloor: '02', destRoom: 'STORAGE' },
+      { firstName: 'ANDREW', lastName: 'HUANG', employeeNumber: '558835', originLocation: 'LAX2105', originFloor: '03.B', originRoom: '03.B.20D', destLocation: 'LAX2126', destFloor: '03.C', destRoom: '03.C.06I' },
+      { firstName: 'BRADY', lastName: 'FREEMAN', employeeNumber: '225482', originLocation: 'LAX2126', originFloor: '03.D', originRoom: '03.D.24D', destLocation: 'LAX2126', destFloor: '03.A', destRoom: '03.A.20C' },
+      { firstName: 'CHRIS', lastName: 'WNUK', employeeNumber: '375485', originLocation: 'LAX2105', originFloor: '03.A', originRoom: '03.A.29D', destLocation: 'LAX2126', destFloor: '03.C', destRoom: '03.C.02D' },
+      { firstName: 'CAROL', lastName: 'KIM', employeeNumber: '700582', originLocation: 'LAX2105', originFloor: '03.D', originRoom: '03.D.25D', destLocation: 'LAX2126', destFloor: '03.D', destRoom: '03.D.21C' },
+      { firstName: 'ERIC', lastName: 'ETCHEVERRY', employeeNumber: '704912', originLocation: 'LAX2126', originFloor: '02.D', originRoom: '02.D.24B', destLocation: 'LAX2126', destFloor: '02', destRoom: 'STORAGE' },
+    ]
+    for (const m of sampleMoves) {
+      await prisma.coroTrakMove.create({ data: {
+        importId: coroImport.id,
+        ...m,
+        workItemCount: 10,
+        isStorage: m.destRoom === 'STORAGE',
+        isInterBuilding: m.originLocation !== m.destLocation,
+        status: 'COMPLETED',
+        completedAt: new Date(),
+      }})
+    }
+    console.log('CoroTrak import seeded')
+
+    // ─── RFID Readers ───
+    const caLocations = await prisma.location.findMany({ where: { state: 'CA' }, take: 4 })
+    const readerTypes = ['PORTAL_FIXED', 'HANDHELD', 'OVERHEAD_FIXED', 'DOCK_DOOR']
+    const zones = ['RECEIVING', 'STAGING', 'WAREHOUSE_A', 'WAREHOUSE_B', 'LOADING_DOCK', 'FLOOR_3', 'FLOOR_5']
+    for (const loc of caLocations) {
+      for (let i = 0; i < 3; i++) {
+        await prisma.rfidReader.create({ data: {
+          locationId: loc.id,
+          name: `${loc.code}-RDR-${String(i+1).padStart(2,'0')}`,
+          readerType: pick(readerTypes),
+          zone: pick(zones),
+          antennaCount: readerTypes[i % 4] === 'PORTAL_FIXED' ? 4 : readerTypes[i % 4] === 'OVERHEAD_FIXED' ? 2 : 1,
+          isActive: true,
+          lastHeartbeat: new Date(Date.now() - Math.random() * 3600000),
+        }})
+      }
+      await prisma.location.update({ where: { id: loc.id }, data: { rfidReaderCount: 3, hasPortalReader: true } })
+    }
+    console.log('RFID readers seeded')
+
+    // ─── RFID Tags on first 500 assets ───
+    const rfidAssets = await prisma.asset.findMany({ take: 500, select: { id: true, tagNumber: true } })
+    for (const asset of rfidAssets) {
+      const tagId = `E200${Math.random().toString(16).substr(2,16).toUpperCase()}`
+      const epc = `3034${Math.random().toString(16).substr(2,20).toUpperCase()}`
+      await prisma.asset.update({ where: { id: asset.id }, data: {
+        rfidTagId: tagId,
+        rfidEpc: epc,
+        lastRfidScanAt: new Date(Date.now() - Math.random() * 7 * 86400000),
+        lastRfidZone: pick(zones),
+        assetClass: Math.random() > 0.9 ? pick(['LAB_SCIENTIFIC', 'TECHNOLOGY_IT']) : 'OFFICE_FURNITURE',
+      }})
+      await prisma.rfidTagAssignment.create({ data: {
+        assetId: asset.id, tagId, epc, tagType: 'UHF_PASSIVE',
+      }})
+    }
+    console.log('RFID tags assigned: 500')
+
+    // ─── RFID Events (simulated scan history) ───
+    const readers = await prisma.rfidReader.findMany({ take: 5 })
+    const taggedAssets = await prisma.asset.findMany({ where: { rfidTagId: { not: null } }, take: 100, select: { id: true, rfidTagId: true, rfidEpc: true } })
+    const eventTypes: any[] = ['TAG_READ', 'ZONE_ENTER', 'ZONE_EXIT', 'PORTAL_SCAN']
+    for (const asset of taggedAssets) {
+      const numEvents = 2 + Math.floor(Math.random() * 5)
+      for (let i = 0; i < numEvents; i++) {
+        const reader = pick(readers)
+        await prisma.rfidEvent.create({ data: {
+          readerId: reader.id,
+          assetId: asset.id,
+          tagId: asset.rfidTagId!,
+          epc: asset.rfidEpc,
+          eventType: pick(eventTypes),
+          zone: reader.zone,
+          signalStrength: -30 - Math.random() * 40,
+          createdAt: new Date(Date.now() - Math.random() * 30 * 86400000),
+        }})
+      }
+    }
+    console.log('RFID events seeded')
+
+    // ─── Sample Project (FF&E) ───
+    const projectLoc = caLocations[0]
+    if (projectLoc) {
+      const project = await prisma.project.create({ data: {
+        clientId: aaaClient.id,
+        name: 'AAA Costa Mesa HQ Renovation',
+        projectNumber: 'PRJ-2026-001',
+        description: 'Complete floor 3 renovation with new furniture installation, phased over 8 weeks aligned with construction milestones.',
+        projectType: 'FF&E_INSTALLATION',
+        status: 'IN_PROGRESS',
+        startDate: new Date('2026-03-01'),
+        targetDate: new Date('2026-05-15'),
+        budget: 450000,
+        actualCost: 187500,
+        locationId: projectLoc.id,
+        generalContractor: 'Turner Construction',
+        projectManager: 'Matt McKinley',
+        totalItems: 840,
+        receivedItems: 520,
+        installedItems: 310,
+      }})
+      const milestones = [
+        { name: 'Construction Complete Floor 3A', targetDate: new Date('2026-03-15'), completedDate: new Date('2026-03-14'), status: 'COMPLETED', sortOrder: 1 },
+        { name: 'FF&E Delivery Phase 1', targetDate: new Date('2026-03-22'), completedDate: new Date('2026-03-21'), status: 'COMPLETED', sortOrder: 2 },
+        { name: 'Installation Phase 1', targetDate: new Date('2026-04-05'), status: 'IN_PROGRESS', sortOrder: 3 },
+        { name: 'Construction Complete Floor 3B', targetDate: new Date('2026-04-15'), status: 'PENDING', sortOrder: 4 },
+        { name: 'FF&E Delivery Phase 2', targetDate: new Date('2026-04-22'), status: 'PENDING', sortOrder: 5 },
+        { name: 'Installation Phase 2', targetDate: new Date('2026-05-01'), status: 'PENDING', sortOrder: 6 },
+        { name: 'Punch List & Closeout', targetDate: new Date('2026-05-15'), status: 'PENDING', sortOrder: 7 },
+      ]
+      for (const ms of milestones) {
+        await prisma.projectMilestone.create({ data: { projectId: project.id, ...ms } })
+      }
+      const deliveries = [
+        { vendorName: 'Steelcase', poNumber: 'PO-2026-1001', expectedDate: new Date('2026-03-20'), receivedDate: new Date('2026-03-21'), itemCount: 280, receivedCount: 275, damagedCount: 5, stagingZone: 'STAGING_A' },
+        { vendorName: 'Herman Miller', poNumber: 'PO-2026-1002', expectedDate: new Date('2026-03-25'), receivedDate: new Date('2026-03-24'), itemCount: 240, receivedCount: 240, damagedCount: 0, stagingZone: 'STAGING_B' },
+        { vendorName: 'Knoll', poNumber: 'PO-2026-1003', expectedDate: new Date('2026-04-20'), itemCount: 320, receivedCount: 0, damagedCount: 0, stagingZone: 'STAGING_A' },
+      ]
+      for (const d of deliveries) {
+        await prisma.projectDelivery.create({ data: { projectId: project.id, ...d } })
+      }
+      console.log('Project seeded')
+    }
+
+    // ─── Sustainability Report ───
+    await prisma.sustainabilityReport.create({ data: {
+      clientId: aaaClient.id,
+      period: '2026-Q1',
+      scope3TransportKg: 12450,
+      embodiedCarbonKg: 34200,
+      carbonAvoidedKg: 18750,
+      wasteToLandfillLbs: 4200,
+      wasteDivertedLbs: 28800,
+      diversionRate: 87.3,
+      cmur: 42.1,
+      itemsReused: 340,
+      itemsRecycled: 180,
+      itemsDonated: 95,
+      itemsDisposed: 42,
+      totalMovesMiles: 8450,
+    }})
+    console.log('Sustainability report seeded')
+  }
 
   console.log("\n✅ Seed complete!")
   console.log(`   Organization: ${org.name}`)

@@ -41,6 +41,9 @@ model Client {
   users          ClientUser[]
   config         ClientConfig?
   fmConfigs      FmPlatformConfig[]
+  coroTrakImports CoroTrakImport[]
+  projects       Project[]
+  sustainabilityReports SustainabilityReport[]
 }
 
 model ClientConfig {
@@ -82,9 +85,14 @@ model Location {
   code           String
   capacity       Int?
   isActive       Boolean      @default(true)
+  buildingCode       String?
+  rfidReaderCount    Int?         @default(0)
+  hasPortalReader    Boolean      @default(false)
   createdAt      DateTime     @default(now())
   assets         Asset[]
   facilities     Facility[]
+  rfidReaders    RfidReader[]
+  projects       Project[]
   workOrdersFrom WorkOrder[]  @relation("FromLocation")
   workOrdersTo   WorkOrder[]  @relation("ToLocation")
 }
@@ -170,14 +178,33 @@ model Asset {
   estimatedResaleValue Float?
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
+  assetClass         AssetClass   @default(OFFICE_FURNITURE)
+  rfidTagId          String?      @unique
+  rfidEpc            String?      @unique
+  lastRfidScanAt     DateTime?
+  lastRfidZone       String?
+  lastRfidReaderId   String?
+  weightLbs          Float?
+  hazmatClass        String?
+  specialHandling    String?
+  warrantyExpiry     DateTime?
+  leaseExpiry        DateTime?
+  depreciationMethod String?
+  usefulLifeMonths   Int?
+  carbonFootprintKg  Float?
+  circularityScore   Float?
   workOrderItems       WorkOrderItem[]
   dispositions         Disposition[]
+  rfidEvents           RfidEvent[]
+  rfidAssignments      RfidTagAssignment[]
 
   @@index([clientId, tagNumber])
   @@index([clientId, status])
   @@index([locationId])
   @@index([type])
   @@index([category])
+  @@index([rfidTagId])
+  @@index([assetClass])
 }
 
 enum AssetCondition {
@@ -195,6 +222,36 @@ enum AssetStatus {
   RESERVED
   IN_TRANSIT
   DECOMMISSIONED
+}
+
+enum AssetClass {
+  OFFICE_FURNITURE
+  LAB_SCIENTIFIC
+  TECHNOLOGY_IT
+  HEAVY_MACHINERY
+  FFE_HOSPITALITY
+  FFE_HEALTHCARE
+  FFE_EDUCATION
+}
+
+enum RfidEventType {
+  TAG_READ
+  ZONE_ENTER
+  ZONE_EXIT
+  PORTAL_SCAN
+  MANUAL_SCAN
+  BULK_SCAN
+}
+
+enum ProjectStatus {
+  PLANNING
+  PROCUREMENT
+  RECEIVING
+  STAGING
+  IN_PROGRESS
+  PUNCH_LIST
+  COMPLETE
+  CLOSED
 }
 
 model AssetPhoto {
@@ -261,6 +318,14 @@ model WorkOrder {
   invoicedAt       DateTime?
   externalId       String?
   externalSource   String?
+  projectId          String?
+  project            Project?     @relation(fields: [projectId], references: [id])
+  assetClass         AssetClass?
+  moveWeight         Float?
+  crewSize           Int?
+  truckCount         Int?
+  milesDriven        Float?
+  carbonEmissionsKg  Float?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   items            WorkOrderItem[]
@@ -459,4 +524,191 @@ model Disposition {
   createdAt        DateTime  @default(now())
   @@index([method])
   @@index([completedAt])
+}
+
+// ─── COROTRAK INTEGRATION ───
+
+model CoroTrakImport {
+  id              String   @id @default(cuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id])
+  workOrderNumber String
+  fileName        String
+  totalPersonMoves Int
+  totalWorkItems   Int
+  originBuildings  String[]
+  destBuildings    String[]
+  storageCount     Int      @default(0)
+  interBuildingCount Int    @default(0)
+  intraBuildingCount Int    @default(0)
+  status           String   @default("IMPORTED")
+  importedAt       DateTime @default(now())
+  moves            CoroTrakMove[]
+  @@index([clientId])
+  @@index([workOrderNumber])
+}
+
+model CoroTrakMove {
+  id              String   @id @default(cuid())
+  importId        String
+  import          CoroTrakImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String
+  employeeNumber  String
+  originLocation  String
+  originFloor     String
+  originRoom      String
+  destLocation    String
+  destFloor       String
+  destRoom        String
+  workItemCount   Int      @default(10)
+  isStorage       Boolean  @default(false)
+  isInterBuilding Boolean  @default(false)
+  status          String   @default("PENDING")
+  scannedAt       DateTime?
+  completedAt     DateTime?
+  rfidVerified    Boolean  @default(false)
+  @@index([importId])
+  @@index([employeeNumber])
+}
+
+// ─── RFID INFRASTRUCTURE ───
+
+model RfidReader {
+  id              String   @id @default(cuid())
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  name            String
+  readerType      String
+  zone            String?
+  ipAddress       String?
+  serialNumber    String?
+  antennaCount    Int      @default(1)
+  isActive        Boolean  @default(true)
+  lastHeartbeat   DateTime?
+  createdAt       DateTime @default(now())
+  events          RfidEvent[]
+  @@index([locationId])
+}
+
+model RfidEvent {
+  id              String        @id @default(cuid())
+  readerId        String?
+  reader          RfidReader?   @relation(fields: [readerId], references: [id])
+  assetId         String?
+  asset           Asset?        @relation(fields: [assetId], references: [id])
+  tagId           String
+  epc             String?
+  eventType       RfidEventType
+  zone            String?
+  signalStrength  Float?
+  latitude        Float?
+  longitude       Float?
+  scannedBy       String?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  @@index([tagId])
+  @@index([assetId])
+  @@index([createdAt])
+  @@index([zone])
+}
+
+model RfidTagAssignment {
+  id              String   @id @default(cuid())
+  assetId         String
+  asset           Asset    @relation(fields: [assetId], references: [id])
+  tagId           String   @unique
+  epc             String   @unique
+  tagType         String   @default("UHF_PASSIVE")
+  assignedAt      DateTime @default(now())
+  assignedBy      String?
+  isActive        Boolean  @default(true)
+  @@index([assetId])
+}
+
+// ─── PROJECT / FF&E ───
+
+model Project {
+  id              String        @id @default(cuid())
+  clientId        String
+  client          Client        @relation(fields: [clientId], references: [id])
+  name            String
+  projectNumber   String        @unique
+  description     String?
+  projectType     String
+  status          ProjectStatus @default(PLANNING)
+  startDate       DateTime?
+  targetDate      DateTime?
+  completedDate   DateTime?
+  budget          Float?
+  actualCost      Float?
+  locationId      String?
+  location        Location?     @relation(fields: [locationId], references: [id])
+  generalContractor String?
+  projectManager  String?
+  totalItems      Int           @default(0)
+  receivedItems   Int           @default(0)
+  installedItems  Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  milestones      ProjectMilestone[]
+  workOrders      WorkOrder[]
+  deliveries      ProjectDelivery[]
+  @@index([clientId])
+  @@index([status])
+}
+
+model ProjectMilestone {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  targetDate      DateTime
+  completedDate   DateTime?
+  dependsOn       String?
+  sortOrder       Int      @default(0)
+  status          String   @default("PENDING")
+  @@index([projectId])
+}
+
+model ProjectDelivery {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  vendorName      String
+  poNumber        String?
+  expectedDate    DateTime
+  receivedDate    DateTime?
+  itemCount       Int
+  receivedCount   Int      @default(0)
+  damagedCount    Int      @default(0)
+  stagingZone     String?
+  inspectedBy     String?
+  notes           String?
+  @@index([projectId])
+}
+
+// ─── SUSTAINABILITY METRICS ───
+
+model SustainabilityReport {
+  id                  String   @id @default(cuid())
+  clientId            String
+  client              Client   @relation(fields: [clientId], references: [id])
+  period              String
+  scope3TransportKg   Float    @default(0)
+  embodiedCarbonKg    Float    @default(0)
+  carbonAvoidedKg     Float    @default(0)
+  wasteToLandfillLbs  Float    @default(0)
+  wasteDivertedLbs    Float    @default(0)
+  diversionRate       Float    @default(0)
+  cmur                Float    @default(0)
+  itemsReused         Int      @default(0)
+  itemsRecycled       Int      @default(0)
+  itemsDonated        Int      @default(0)
+  itemsDisposed       Int      @default(0)
+  totalMovesMiles     Float    @default(0)
+  generatedAt         DateTime @default(now())
+  @@unique([clientId, period])
+  @@index([clientId])
 }
