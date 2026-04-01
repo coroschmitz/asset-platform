@@ -138,6 +138,9 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
+      {/* Cost Analytics */}
+      <CostAnalytics />
+
       {/* Partner Performance */}
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Partner Performance</CardTitle></CardHeader>
@@ -215,5 +218,153 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ─── Cost Analytics Component ───
+const COST_BY_PARTNER = [
+  { partner: "Corovan", spend: 28450, orders: 8, avgCost: 3556 },
+  { partner: "Armstrong", spend: 3400, orders: 1, avgCost: 3400 },
+  { partner: "Desert Moving", spend: 7125, orders: 1, avgCost: 7125 },
+  { partner: "Rocky Mountain", spend: 510, orders: 1, avgCost: 510 },
+  { partner: "Dodge Moving", spend: 8140, orders: 1, avgCost: 8140 },
+  { partner: "Silver State", spend: 3850, orders: 1, avgCost: 3850 },
+]
+const COST_BY_TYPE = [
+  { type: "Storage-In", spend: 9820, count: 3 },
+  { type: "Storage-Out", spend: 4327, count: 2 },
+  { type: "Furniture Move", spend: 12670, count: 3 },
+  { type: "Office Move", spend: 11990, count: 2 },
+  { type: "Reconfigure", spend: 4560, count: 1 },
+  { type: "Event Setup", spend: 3675, count: 1 },
+]
+const MONTHLY_SPEND = [
+  { month: "Nov 2025", spend: 11990, budget: 15000 },
+  { month: "Dec 2025", spend: 8230, budget: 12000 },
+  { month: "Jan 2026", spend: 4890, budget: 10000 },
+  { month: "Feb 2026", spend: 8055, budget: 12000 },
+  { month: "Mar 2026", spend: 23482, budget: 20000 },
+]
+const STORAGE_COST_TREND = [
+  { month: "Oct 2025", monthlyCost: 24500 },
+  { month: "Nov 2025", monthlyCost: 26200 },
+  { month: "Dec 2025", monthlyCost: 25800 },
+  { month: "Jan 2026", monthlyCost: 23100 },
+  { month: "Feb 2026", monthlyCost: 21600 },
+  { month: "Mar 2026", monthlyCost: 21175 },
+]
+
+function CostAnalytics() {
+  const totalSpend = COST_BY_PARTNER.reduce((s, p) => s + p.spend, 0)
+  const totalOrders = COST_BY_PARTNER.reduce((s, p) => s + p.orders, 0)
+  const avgPerMove = Math.round(totalSpend / totalOrders)
+  const currentStorage = STORAGE_COST_TREND[STORAGE_COST_TREND.length - 1].monthlyCost
+
+  return (
+    <>
+      <div>
+        <h2 className="text-lg font-semibold mb-3">Cost Analytics</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">Total Spend (Q1)</div>
+              <div className="text-2xl font-bold mt-1">${(totalSpend / 1000).toFixed(1)}K</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">Avg Cost / Move</div>
+              <div className="text-2xl font-bold mt-1">${avgPerMove.toLocaleString()}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">Monthly Storage Cost</div>
+              <div className="text-2xl font-bold mt-1">${(currentStorage / 1000).toFixed(1)}K</div>
+              <div className="text-[10px] text-green-600">-13.6% since Oct</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-muted-foreground">NTE Overages</div>
+              <div className="text-2xl font-bold text-red-600 mt-1">1</div>
+              <div className="text-[10px] text-muted-foreground">$625 over on WO-0010</div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Spend by Partner</CardTitle></CardHeader>
+          <CardContent>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={COST_BY_PARTNER} layout="vertical" margin={{ left: 60 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis type="number" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} />
+                  <YAxis type="category" dataKey="partner" width={100} tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}`, "Spend"]} />
+                  <Bar dataKey="spend" fill="#ea580c" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Spend by Service Type</CardTitle></CardHeader>
+          <CardContent>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={COST_BY_TYPE} margin={{ left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="type" tick={{ fontSize: 10 }} />
+                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}`, "Spend"]} />
+                  <Bar dataKey="spend" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Monthly Spend vs. Budget</CardTitle></CardHeader>
+          <CardContent>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={MONTHLY_SPEND}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}`, ""]} />
+                  <Bar dataKey="spend" name="Actual Spend" fill="#ea580c" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="budget" name="Budget" fill="#d1d5db" radius={[4, 4, 0, 0]} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Monthly Storage Cost Trend</CardTitle></CardHeader>
+          <CardContent>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={STORAGE_COST_TREND}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(1)}K`} />
+                  <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}`, "Monthly Cost"]} />
+                  <Line type="monotone" dataKey="monthlyCost" stroke="#059669" strokeWidth={2} dot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </>
   )
 }

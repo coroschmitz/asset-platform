@@ -515,22 +515,27 @@ export default function CoroTrakDetailPage({
         </div>
       )}
 
-      {/* Moves Table */}
+      {/* Person Move Cards (CoroTrak Style) */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Moves ({filteredMoves.length})</CardTitle>
-            {selectedIds.size > 0 && (
-              <Button
-                size="sm"
-                onClick={handleBulkComplete}
-                disabled={bulkUpdating}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle2 className="h-4 w-4 mr-1" />
-                Mark Complete ({selectedIds.size})
+            <CardTitle className="text-base">Person Moves ({filteredMoves.length})</CardTitle>
+            <div className="flex items-center gap-2">
+              {selectedIds.size > 0 && (
+                <Button
+                  size="sm"
+                  onClick={handleBulkComplete}
+                  disabled={bulkUpdating}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                  Mark Complete ({selectedIds.size})
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={handleExportCsv}>
+                <Download className="h-4 w-4 mr-1" /> CSV
               </Button>
-            )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -561,77 +566,107 @@ export default function CoroTrakDetailPage({
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filteredMoves.length > 0 && selectedIds.size === filteredMoves.length}
+                onChange={toggleSelectAll}
+                className="rounded"
+              />
+              Select all
+            </label>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-2 pr-2">
-                    <input
-                      type="checkbox"
-                      checked={filteredMoves.length > 0 && selectedIds.size === filteredMoves.length}
-                      onChange={toggleSelectAll}
-                      className="rounded"
-                    />
-                  </th>
-                  <th className="pb-2 font-medium">Name</th>
-                  <th className="pb-2 font-medium">Employee #</th>
-                  <th className="pb-2 font-medium">From</th>
-                  <th className="pb-2 font-medium">To</th>
-                  <th className="pb-2 font-medium text-right">Items</th>
-                  <th className="pb-2 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMoves.map((m) => (
-                  <tr key={m.id} className="border-b hover:bg-gray-50 transition-colors">
-                    <td className="py-2.5 pr-2">
+          {/* Person Cards Grid */}
+          <div className="space-y-2">
+            {filteredMoves.map((m) => {
+              const pct = m.status === "COMPLETED" ? 100 : m.status === "IN_PROGRESS" ? 62 : 0
+              return (
+                <div
+                  key={m.id}
+                  className={cn(
+                    "border rounded-lg p-4 transition-colors hover:shadow-sm",
+                    selectedIds.has(m.id) ? "border-[#ea580c] bg-orange-50/30" : "border-gray-200"
+                  )}
+                  onClick={() => toggleSelect(m.id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(m.id)}
                         onChange={() => toggleSelect(m.id)}
-                        className="rounded"
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded mt-0.5"
                       />
-                    </td>
-                    <td className="py-2.5 font-medium">
-                      {m.firstName} {m.lastName}
-                    </td>
-                    <td className="py-2.5 text-muted-foreground font-mono text-xs">{m.employeeNumber}</td>
-                    <td className="py-2.5">
-                      <span className="font-medium">{m.originLocation}</span>
-                      <span className="text-muted-foreground"> / {m.originFloor} / {m.originRoom}</span>
-                    </td>
-                    <td className="py-2.5">
-                      {m.isStorage ? (
-                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                          STORAGE
+                      <div>
+                        <div className="font-semibold text-sm">{m.firstName} {m.lastName}</div>
+                        <div className="text-xs text-muted-foreground font-mono">#{m.employeeNumber}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="flex items-center gap-2">
+                        <Badge className={cn("text-xs", MOVE_STATUS_COLORS[m.status] || "bg-gray-100 text-gray-700")}>
+                          {m.status === "COMPLETED" ? "Completed" : m.status === "IN_PROGRESS" ? "In Progress" : "Pending"}
                         </Badge>
+                        <span className="text-xs font-medium">{pct}%</span>
+                      </div>
+                      <div className="text-lg font-bold mt-0.5">{m.workItemCount} <span className="text-xs font-normal text-muted-foreground">Items</span></div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Origin</div>
+                      <div className="text-xs mt-0.5">
+                        <span className="font-medium">Location</span> {m.originLocation}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Floor: {m.originFloor}</div>
+                      <div className="text-xs text-muted-foreground">Room: {m.originRoom}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Destination</div>
+                      {m.isStorage ? (
+                        <div className="text-xs mt-0.5">
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">STORAGE</Badge>
+                        </div>
                       ) : (
                         <>
-                          <span className="font-medium">{m.destLocation}</span>
-                          <span className="text-muted-foreground"> / {m.destFloor} / {m.destRoom}</span>
+                          <div className="text-xs mt-0.5">
+                            <span className="font-medium">Location</span> {m.destLocation}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Floor: {m.destFloor}</div>
+                          <div className="text-xs text-muted-foreground">Room: {m.destRoom}</div>
                         </>
                       )}
-                    </td>
-                    <td className="py-2.5 text-right">{m.workItemCount}</td>
-                    <td className="py-2.5">
-                      <Badge className={cn("text-xs", MOVE_STATUS_COLORS[m.status] || "bg-gray-100 text-gray-700")}>
-                        {m.status.replace(/_/g, " ")}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-                {filteredMoves.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                      No moves match your filters
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                    </div>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="mt-3">
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          m.status === "COMPLETED" ? "bg-[#2563eb]" : m.status === "IN_PROGRESS" ? "bg-[#2563eb]" : "bg-gray-300"
+                        )}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* RFID indicator */}
+                  {m.rfidVerified && (
+                    <div className="flex items-center gap-1 mt-2 text-[10px] text-green-700">
+                      <Radio className="h-3 w-3" /> RFID Verified
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            {filteredMoves.length === 0 && (
+              <div className="py-8 text-center text-muted-foreground">No moves match your filters</div>
+            )}
           </div>
         </CardContent>
       </Card>
