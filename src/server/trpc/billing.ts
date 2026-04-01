@@ -1,4 +1,4 @@
-import { router, publicProcedure } from "./trpc"
+import { router, publicProcedure, orgAdminProcedure } from "./trpc"
 import { z } from "zod/v4"
 
 export const billingRouter = router({

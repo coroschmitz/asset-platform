@@ -1,4 +1,4 @@
-import { router, publicProcedure } from "./trpc"
+import { router, publicProcedure, protectedProcedure, clientProcedure } from "./trpc"
 import { z } from "zod/v4"
 import { Prisma } from "@prisma/client"
 
