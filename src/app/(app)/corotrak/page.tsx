@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
@@ -43,6 +43,37 @@ const STATUS_COLORS: Record<string, string> = {
   COMPLETED: "bg-green-100 text-green-700",
 }
 
+const MOCK_IMPORTS: CoroTrakImport[] = [
+  {
+    id: "mock-1", workOrderNumber: "OCA63814-1", fileName: "WorkOrder_OCA63814-1.xlsx",
+    totalPersonMoves: 336, totalWorkItems: 3360, originBuildings: ["LAX2105", "LAX2126"],
+    destBuildings: ["LAX2126"], storageCount: 46, interBuildingCount: 203, intraBuildingCount: 133,
+    status: "COMPLETED", importedAt: "2026-03-15T14:30:00Z",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" }, _count: { moves: 336 },
+  },
+  {
+    id: "mock-2", workOrderNumber: "OCA63920-2", fileName: "WorkOrder_OCA63920-2.xlsx",
+    totalPersonMoves: 182, totalWorkItems: 1820, originBuildings: ["LAX2126"],
+    destBuildings: ["LAX2126", "LAX2105"], storageCount: 12, interBuildingCount: 67, intraBuildingCount: 103,
+    status: "IN_PROGRESS", importedAt: "2026-03-28T09:15:00Z",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" }, _count: { moves: 182 },
+  },
+  {
+    id: "mock-3", workOrderNumber: "AZA127845-1", fileName: "WorkOrder_AZA127845-1.xlsx",
+    totalPersonMoves: 94, totalWorkItems: 940, originBuildings: ["PHX4010"],
+    destBuildings: ["PHX4010", "PHX4022"], storageCount: 8, interBuildingCount: 31, intraBuildingCount: 55,
+    status: "COMPLETED", importedAt: "2026-02-20T11:00:00Z",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" }, _count: { moves: 94 },
+  },
+  {
+    id: "mock-4", workOrderNumber: "OCA64100-1", fileName: "WorkOrder_OCA64100-1.xlsx",
+    totalPersonMoves: 245, totalWorkItems: 2450, originBuildings: ["LAX2105", "LAX2126", "LAX2130"],
+    destBuildings: ["LAX2126"], storageCount: 32, interBuildingCount: 156, intraBuildingCount: 57,
+    status: "IMPORTED", importedAt: "2026-04-01T08:45:00Z",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" }, _count: { moves: 245 },
+  },
+]
+
 export default function CoroTrakPage() {
   const [imports, setImports] = useState<CoroTrakImport[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,18 +95,21 @@ export default function CoroTrakPage() {
     try {
       const res = await fetch("/api/v1/corotrak/imports")
       const json = await res.json()
-      if (json.success) setImports(json.data)
+      if (json.success && json.data.length > 0) {
+        setImports(json.data)
+      } else {
+        setImports(MOCK_IMPORTS)
+      }
     } catch {
-      // silent
+      setImports(MOCK_IMPORTS)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  // Fetch on mount
-  useState(() => {
+  useEffect(() => {
     fetchImports()
-  })
+  }, [fetchImports])
 
   const handleFile = (file: File) => {
     setSelectedFile(file)

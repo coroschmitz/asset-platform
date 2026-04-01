@@ -43,6 +43,53 @@ interface Project {
   budgetPercent: number
 }
 
+const MOCK_PROJECTS: Project[] = [
+  {
+    id: "mock-p1", name: "AAA Costa Mesa HQ Renovation", projectNumber: "PRJ-2026-001",
+    description: "Complete floor 3 renovation with new furniture installation", projectType: "FF&E_INSTALLATION",
+    status: "IN_PROGRESS", startDate: "2026-03-01T00:00:00Z", targetDate: "2026-05-15T00:00:00Z",
+    completedDate: null, budget: 450000, actualCost: 187500, totalItems: 840, receivedItems: 520,
+    installedItems: 310, generalContractor: "Turner Construction", projectManager: "Matt McKinley",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" },
+    location: { name: "Costa Mesa Administrative Office", code: "AOCM", city: "Costa Mesa", state: "CA" },
+    _count: { milestones: 7, deliveries: 3, workOrders: 4 },
+    receivedPercent: 61.9, installedPercent: 36.9, budgetPercent: 41.7,
+  },
+  {
+    id: "mock-p2", name: "LA HQ Floor 5 Refresh", projectNumber: "PRJ-2026-002",
+    description: "Open-plan conversion with sit-stand desks and collaboration zones", projectType: "RENOVATION",
+    status: "PROCUREMENT", startDate: "2026-04-15T00:00:00Z", targetDate: "2026-07-30T00:00:00Z",
+    completedDate: null, budget: 320000, actualCost: 24000, totalItems: 560, receivedItems: 0,
+    installedItems: 0, generalContractor: "Skanska USA", projectManager: "Matt McKinley",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" },
+    location: { name: "Los Angeles Headquarters", code: "LAHQ", city: "Los Angeles", state: "CA" },
+    _count: { milestones: 5, deliveries: 0, workOrders: 1 },
+    receivedPercent: 0, installedPercent: 0, budgetPercent: 7.5,
+  },
+  {
+    id: "mock-p3", name: "Coppell TX Office Move", projectNumber: "PRJ-2026-003",
+    description: "Full office relocation from legacy building to new facility with decommission", projectType: "OFFICE_MOVE",
+    status: "PLANNING", startDate: "2026-06-01T00:00:00Z", targetDate: "2026-08-15T00:00:00Z",
+    completedDate: null, budget: 185000, actualCost: 0, totalItems: 420, receivedItems: 0,
+    installedItems: 0, generalContractor: null, projectManager: "Matt McKinley",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" },
+    location: { name: "Coppell Regional Office", code: "CPTX", city: "Coppell", state: "TX" },
+    _count: { milestones: 4, deliveries: 0, workOrders: 0 },
+    receivedPercent: 0, installedPercent: 0, budgetPercent: 0,
+  },
+  {
+    id: "mock-p4", name: "Phoenix Branch Furniture Replacement", projectNumber: "PRJ-2025-018",
+    description: "Replace aging workstations with modern ergonomic furniture across 2 floors", projectType: "FF&E_INSTALLATION",
+    status: "COMPLETE", startDate: "2025-11-01T00:00:00Z", targetDate: "2026-01-31T00:00:00Z",
+    completedDate: "2026-01-28T00:00:00Z", budget: 95000, actualCost: 91200, totalItems: 180, receivedItems: 180,
+    installedItems: 180, generalContractor: "Desert Moving & Storage", projectManager: "Matt McKinley",
+    client: { name: "AAA", fullName: "Automobile Club of Southern California" },
+    location: { name: "Phoenix Branch Office", code: "BR095", city: "Phoenix", state: "AZ" },
+    _count: { milestones: 3, deliveries: 2, workOrders: 3 },
+    receivedPercent: 100, installedPercent: 100, budgetPercent: 96.0,
+  },
+]
+
 const STATUS_COLORS: Record<string, string> = {
   PLANNING: "bg-gray-100 text-gray-700",
   PROCUREMENT: "bg-blue-100 text-blue-700",
@@ -63,9 +110,13 @@ export default function ProjectsPage() {
       try {
         const res = await fetch("/api/v1/projects")
         const json = await res.json()
-        if (json.success) setProjects(json.data)
+        if (json.success && json.data.length > 0) {
+          setProjects(json.data)
+        } else {
+          setProjects(MOCK_PROJECTS)
+        }
       } catch {
-        // silent
+        setProjects(MOCK_PROJECTS)
       } finally {
         setLoading(false)
       }

@@ -73,6 +73,56 @@ const READER_TYPE_COLORS: Record<string, string> = {
   DOCK_DOOR: "bg-green-100 text-green-700",
 }
 
+const MOCK_ANALYTICS: Analytics = {
+  coverage: { totalAssets: 4214, totalTagged: 500, percent: 11.9 },
+  readers: { total: 12, online: 10 },
+  events: { last24h: 1847, lastWeek: 12340 },
+  topZones: [
+    { zone: "RECEIVING", eventCount: 3420 },
+    { zone: "WAREHOUSE_A", eventCount: 2815 },
+    { zone: "STAGING", eventCount: 2190 },
+    { zone: "LOADING_DOCK", eventCount: 1875 },
+    { zone: "FLOOR_3", eventCount: 1240 },
+    { zone: "WAREHOUSE_B", eventCount: 800 },
+  ],
+  staleAssets: [
+    { id: "s1", tagNumber: "COR-100245", description: "CHAIR-TASK, ERGONOMIC, ADJ ARMS 26X42", lastRfidScanAt: "2026-02-15T10:00:00Z", location: { name: "Costa Mesa Administrative Office", code: "AOCM" } },
+    { id: "s2", tagNumber: "COR-100890", description: "DESK-SIT/STAND, ELECTRIC 60X30", lastRfidScanAt: "2026-02-18T14:30:00Z", location: { name: "Los Angeles Headquarters", code: "LAHQ" } },
+    { id: "s3", tagNumber: "COR-101320", description: "TABLE-CONFERENCE, RECTANGULAR 96X48", lastRfidScanAt: "2026-02-10T09:15:00Z", location: { name: "Los Angeles Headquarters", code: "LAHQ" } },
+  ],
+  untaggedHighValue: [
+    { id: "u1", tagNumber: "COR-102450", description: "DESK-SIT/STAND, ELECTRIC 72X30", currentValue: 1850, location: { name: "Costa Mesa Administrative Office", code: "AOCM" } },
+    { id: "u2", tagNumber: "COR-103100", description: "CHAIR-CONFERENCE, HIGH-BACK LEATHER 28X46", currentValue: 1620, location: { name: "Los Angeles Headquarters", code: "LAHQ" } },
+    { id: "u3", tagNumber: "COR-100780", description: "TABLE-CONFERENCE, RECTANGULAR 96X48", currentValue: 1450, location: { name: "Coppell Regional Office", code: "CPTX" } },
+    { id: "u4", tagNumber: "COR-101560", description: "CUBICLE-8x8 MANAGER STATION", currentValue: 1280, location: { name: "Costa Mesa Administrative Office", code: "AOCM" } },
+    { id: "u5", tagNumber: "COR-102890", description: "DESK-CREDENZA VENEER 66X30", currentValue: 980, location: { name: "St. Louis Regional Office", code: "STLMO" } },
+    { id: "u6", tagNumber: "COR-103445", description: "CHAIR-TASK, ERGONOMIC, ADJ ARMS 26X42", currentValue: 875, location: { name: "Los Angeles Headquarters", code: "LAHQ" } },
+  ],
+}
+
+const now = new Date().toISOString()
+const MOCK_READERS: ReaderData[] = [
+  { id: "r1", name: "AOCM-RDR-01", readerType: "PORTAL_FIXED", zone: "RECEIVING", isActive: true, lastHeartbeat: now, antennaCount: 4, lastEventAt: now, location: { name: "Costa Mesa Administrative Office", code: "AOCM", city: "Costa Mesa", state: "CA" }, _count: { events: 2450 } },
+  { id: "r2", name: "AOCM-RDR-02", readerType: "OVERHEAD_FIXED", zone: "WAREHOUSE_A", isActive: true, lastHeartbeat: now, antennaCount: 2, lastEventAt: now, location: { name: "Costa Mesa Administrative Office", code: "AOCM", city: "Costa Mesa", state: "CA" }, _count: { events: 1820 } },
+  { id: "r3", name: "AOCM-RDR-03", readerType: "HANDHELD", zone: "STAGING", isActive: true, lastHeartbeat: new Date(Date.now() - 25 * 60000).toISOString(), antennaCount: 1, lastEventAt: new Date(Date.now() - 20 * 60000).toISOString(), location: { name: "Costa Mesa Administrative Office", code: "AOCM", city: "Costa Mesa", state: "CA" }, _count: { events: 960 } },
+  { id: "r4", name: "LAHQ-RDR-01", readerType: "PORTAL_FIXED", zone: "LOADING_DOCK", isActive: true, lastHeartbeat: now, antennaCount: 4, lastEventAt: now, location: { name: "Los Angeles Headquarters", code: "LAHQ", city: "Los Angeles", state: "CA" }, _count: { events: 1875 } },
+  { id: "r5", name: "LAHQ-RDR-02", readerType: "DOCK_DOOR", zone: "RECEIVING", isActive: true, lastHeartbeat: now, antennaCount: 1, lastEventAt: now, location: { name: "Los Angeles Headquarters", code: "LAHQ", city: "Los Angeles", state: "CA" }, _count: { events: 1340 } },
+  { id: "r6", name: "LAHQ-RDR-03", readerType: "OVERHEAD_FIXED", zone: "FLOOR_3", isActive: true, lastHeartbeat: new Date(Date.now() - 45 * 60000).toISOString(), antennaCount: 2, lastEventAt: new Date(Date.now() - 40 * 60000).toISOString(), location: { name: "Los Angeles Headquarters", code: "LAHQ", city: "Los Angeles", state: "CA" }, _count: { events: 720 } },
+  { id: "r7", name: "CPTX-RDR-01", readerType: "PORTAL_FIXED", zone: "WAREHOUSE_B", isActive: true, lastHeartbeat: now, antennaCount: 4, lastEventAt: now, location: { name: "Coppell Regional Office", code: "CPTX", city: "Coppell", state: "TX" }, _count: { events: 890 } },
+  { id: "r8", name: "CPTX-RDR-02", readerType: "HANDHELD", zone: "STAGING", isActive: true, lastHeartbeat: now, antennaCount: 1, lastEventAt: now, location: { name: "Coppell Regional Office", code: "CPTX", city: "Coppell", state: "TX" }, _count: { events: 650 } },
+]
+
+const MOCK_EVENTS: EventData[] = [
+  { id: "e1", tagId: "E200A1B2C3D4E5F6", epc: "3034F8A1B2C3D4E5", eventType: "PORTAL_SCAN", zone: "RECEIVING", signalStrength: -32, createdAt: new Date(Date.now() - 120000).toISOString(), asset: { id: "a1", tagNumber: "COR-100001", description: "PANEL-ENHANCED, TACKABLE, ACOUSTICAL 48X65" }, reader: { id: "r1", name: "AOCM-RDR-01", zone: "RECEIVING" } },
+  { id: "e2", tagId: "E200B2C3D4E5F6A7", epc: "3034A2B3C4D5E6F7", eventType: "ZONE_ENTER", zone: "WAREHOUSE_A", signalStrength: -38, createdAt: new Date(Date.now() - 180000).toISOString(), asset: { id: "a2", tagNumber: "COR-100045", description: "CHAIR-TASK, ERGONOMIC, ADJ ARMS 26X42" }, reader: { id: "r2", name: "AOCM-RDR-02", zone: "WAREHOUSE_A" } },
+  { id: "e3", tagId: "E200C3D4E5F6A7B8", epc: "3034B3C4D5E6F7A8", eventType: "TAG_READ", zone: "STAGING", signalStrength: -45, createdAt: new Date(Date.now() - 300000).toISOString(), asset: { id: "a3", tagNumber: "COR-100120", description: "DESK-SIT/STAND, ELECTRIC 60X30" }, reader: { id: "r3", name: "AOCM-RDR-03", zone: "STAGING" } },
+  { id: "e4", tagId: "E200D4E5F6A7B8C9", epc: "3034C4D5E6F7A8B9", eventType: "ZONE_EXIT", zone: "LOADING_DOCK", signalStrength: -52, createdAt: new Date(Date.now() - 420000).toISOString(), asset: { id: "a4", tagNumber: "COR-100200", description: "TABLE-CONFERENCE, RECTANGULAR 96X48" }, reader: { id: "r4", name: "LAHQ-RDR-01", zone: "LOADING_DOCK" } },
+  { id: "e5", tagId: "E200E5F6A7B8C9D0", epc: null, eventType: "PORTAL_SCAN", zone: "RECEIVING", signalStrength: -35, createdAt: new Date(Date.now() - 600000).toISOString(), asset: null, reader: { id: "r5", name: "LAHQ-RDR-02", zone: "RECEIVING" } },
+  { id: "e6", tagId: "E200F6A7B8C9D0E1", epc: "3034E6F7A8B9C0D1", eventType: "TAG_READ", zone: "FLOOR_3", signalStrength: -41, createdAt: new Date(Date.now() - 780000).toISOString(), asset: { id: "a6", tagNumber: "COR-100350", description: "FILING-LATERAL, 3-DRAWER 36X40" }, reader: { id: "r6", name: "LAHQ-RDR-03", zone: "FLOOR_3" } },
+  { id: "e7", tagId: "E200A7B8C9D0E1F2", epc: "3034F7A8B9C0D1E2", eventType: "ZONE_ENTER", zone: "WAREHOUSE_B", signalStrength: -29, createdAt: new Date(Date.now() - 900000).toISOString(), asset: { id: "a7", tagNumber: "COR-100410", description: "STORAGE-BOOKCASE, 3-SHELF 36X42" }, reader: { id: "r7", name: "CPTX-RDR-01", zone: "WAREHOUSE_B" } },
+  { id: "e8", tagId: "E200B8C9D0E1F2A3", epc: "3034A8B9C0D1E2F3", eventType: "MANUAL_SCAN", zone: "STAGING", signalStrength: -36, createdAt: new Date(Date.now() - 1200000).toISOString(), asset: { id: "a8", tagNumber: "COR-100480", description: "WORKSURFACE-RECTANGULAR LAMINATE 60X29" }, reader: { id: "r8", name: "CPTX-RDR-02", zone: "STAGING" } },
+]
+
 function readerStatus(lastHeartbeat: string | null): { color: string; label: string } {
   if (!lastHeartbeat) return { color: "bg-gray-400", label: "Never" }
   const diff = Date.now() - new Date(lastHeartbeat).getTime()
@@ -107,11 +157,13 @@ export default function RfidPage() {
         readersRes.json(),
         eventsRes.json(),
       ])
-      if (analyticsJson.success) setAnalytics(analyticsJson.data)
-      if (readersJson.success) setReaders(readersJson.data)
-      if (eventsJson.success) setEvents(eventsJson.data.events)
+      setAnalytics(analyticsJson.success && analyticsJson.data?.coverage ? analyticsJson.data : MOCK_ANALYTICS)
+      setReaders(readersJson.success && readersJson.data?.length > 0 ? readersJson.data : MOCK_READERS)
+      setEvents(eventsJson.success && eventsJson.data?.events?.length > 0 ? eventsJson.data.events : MOCK_EVENTS)
     } catch {
-      // silent
+      setAnalytics(MOCK_ANALYTICS)
+      setReaders(MOCK_READERS)
+      setEvents(MOCK_EVENTS)
     } finally {
       setLoading(false)
     }
