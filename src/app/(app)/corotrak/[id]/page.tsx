@@ -1,0 +1,603 @@
+"use client"
+
+import { useState, useEffect, useCallback, use } from "react"
+import Link from "next/link"
+import { format } from "date-fns"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
+import {
+  ArrowLeft,
+  Users,
+  ArrowRightLeft,
+  Warehouse,
+  PackageCheck,
+  Search,
+  Download,
+  CheckCircle2,
+  Radio,
+  ScanLine,
+} from "lucide-react"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts"
+
+interface Move {
+  id: string
+  firstName: string
+  lastName: string
+  employeeNumber: string
+  originLocation: string
+  originFloor: string
+  originRoom: string
+  destLocation: string
+  destFloor: string
+  destRoom: string
+  workItemCount: number
+  isStorage: boolean
+  isInterBuilding: boolean
+  status: string
+  rfidVerified: boolean
+  completedAt: string | null
+}
+
+interface ImportData {
+  id: string
+  workOrderNumber: string
+  fileName: string
+  totalPersonMoves: number
+  totalWorkItems: number
+  originBuildings: string[]
+  destBuildings: string[]
+  storageCount: number
+  interBuildingCount: number
+  intraBuildingCount: number
+  status: string
+  importedAt: string
+  client: { name: string; fullName: string }
+  moves: Move[]
+  summary: {
+    statusBreakdown: Record<string, number>
+    rfidVerifiedCount: number
+    rfidUnverifiedCount: number
+  }
+}
+
+interface Analytics {
+  moveFlow: { from: string; to: string; count: number }[]
+  floorHeatmap: { floor: string; originCount: number; destCount: number }[]
+  statusBreakdown: { status: string; count: number }[]
+  storageAnalysis: {
+    totalToStorage: number
+    percentage: number
+    byFloor: { floor: string; count: number }[]
+  }
+  timeline: {
+    completed: number
+    inProgress: number
+    pending: number
+    total: number
+    completionPercentage: number
+  }
+}
+
+const STATUS_TABS = [
+  { key: "ALL", label: "All" },
+  { key: "PENDING", label: "Pending" },
+  { key: "IN_PROGRESS", label: "In Progress" },
+  { key: "COMPLETED", label: "Completed" },
+  { key: "STORAGE", label: "Storage" },
+]
+
+const MOVE_STATUS_COLORS: Record<string, string> = {
+  PENDING: "bg-yellow-100 text-yellow-700",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  COMPLETED: "bg-green-100 text-green-700",
+}
+
+const FLOW_COLORS = ["#ea580c", "#2563eb", "#7c3aed", "#059669", "#d97706"]
+
+export default function CoroTrakDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = use(params)
+  const [importData, setImportData] = useState<ImportData | null>(null)
+  const [analytics, setAnalytics] = useState<Analytics | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState("ALL")
+  const [search, setSearch] = useState("")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkUpdating, setBulkUpdating] = useState(false)
+
+  const fetchData = useCallback(async () => {
+    try {
+      const [importRes, analyticsRes] = await Promise.all([
+        fetch(`/api/v1/corotrak/imports/${id}`),
+        fetch(`/api/v1/corotrak/imports/${id}/analytics`),
+      ])
+      const importJson = await importRes.json()
+      const analyticsJson = await analyticsRes.json()
+      if (importJson.success) setImportData(importJson.data)
+      if (analyticsJson.success) setAnalytics(analyticsJson.data)
+    } catch {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const filteredMoves = importData?.moves.filter((m) => {
+    if (statusFilter === "STORAGE") return m.isStorage
+    if (statusFilter !== "ALL" && m.status !== statusFilter) return false
+    if (search) {
+      const q = search.toLowerCase()
+      return (
+        m.firstName.toLowerCase().includes(q) ||
+        m.lastName.toLowerCase().includes(q) ||
+        m.employeeNumber.includes(q)
+      )
+    }
+    return true
+  }) ?? []
+
+  const handleBulkComplete = async () => {
+    if (selectedIds.size === 0) return
+    setBulkUpdating(true)
+    try {
+      await fetch(`/api/v1/corotrak/imports/${id}/moves`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moveIds: [...selectedIds], status: "COMPLETED" }),
+      })
+      setSelectedIds(new Set())
+      fetchData()
+    } catch {
+      // silent
+    } finally {
+      setBulkUpdating(false)
+    }
+  }
+
+  const handleExportCsv = () => {
+    if (!importData) return
+    const headers = [
+      "First Name", "Last Name", "Employee #",
+      "Origin Location", "Origin Floor", "Origin Room",
+      "Dest Location", "Dest Floor", "Dest Room",
+      "Work Items", "Status", "RFID Verified",
+    ]
+    const csvRows = [headers.join(",")]
+    for (const m of importData.moves) {
+      csvRows.push([
+        m.firstName, m.lastName, m.employeeNumber,
+        m.originLocation, m.originFloor, m.originRoom,
+        m.destLocation, m.destFloor, m.destRoom,
+        m.workItemCount, m.status, m.rfidVerified ? "Yes" : "No",
+      ].join(","))
+    }
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `${importData.workOrderNumber}-moves.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const toggleSelect = (moveId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(moveId)) next.delete(moveId)
+      else next.add(moveId)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredMoves.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredMoves.map((m) => m.id)))
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+        <div className="grid grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-24 bg-gray-200 rounded animate-pulse" />
+          ))}
+        </div>
+        <div className="h-64 bg-gray-200 rounded animate-pulse" />
+      </div>
+    )
+  }
+
+  if (!importData) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">Import not found</p>
+        <Link href="/corotrak">
+          <Button variant="outline" className="mt-4">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to CoroTrak
+          </Button>
+        </Link>
+      </div>
+    )
+  }
+
+  const interBuildingPct = importData.totalPersonMoves > 0
+    ? Math.round((importData.interBuildingCount / importData.totalPersonMoves) * 100)
+    : 0
+  const storagePct = importData.totalPersonMoves > 0
+    ? Math.round((importData.storageCount / importData.totalPersonMoves) * 100)
+    : 0
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <Link href="/corotrak" className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <h1 className="text-2xl font-bold">{importData.workOrderNumber}</h1>
+            <Badge className={cn("text-xs", MOVE_STATUS_COLORS[importData.status] || "bg-gray-100 text-gray-700")}>
+              {importData.status}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground ml-8">
+            <span>{importData.client.name}</span>
+            <span>·</span>
+            <span>{format(new Date(importData.importedAt), "MMM d, yyyy h:mm a")}</span>
+            <span>·</span>
+            <span>{importData.fileName}</span>
+          </div>
+        </div>
+        <Button variant="outline" onClick={handleExportCsv}>
+          <Download className="h-4 w-4 mr-2" />
+          Export CSV
+        </Button>
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-50">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{importData.totalPersonMoves}</p>
+                <p className="text-xs text-muted-foreground">Total Person Moves</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-orange-50">
+                <ArrowRightLeft className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">
+                  {importData.interBuildingCount}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">({interBuildingPct}%)</span>
+                </p>
+                <p className="text-xs text-muted-foreground">Inter-Building Transfers</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-purple-50">
+                <Warehouse className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">
+                  {importData.storageCount}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">({storagePct}%)</span>
+                </p>
+                <p className="text-xs text-muted-foreground">Moves to Storage</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-green-50">
+                <PackageCheck className="h-5 w-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{importData.totalWorkItems.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">Total Work Items</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Flow Visualization + Floor Heatmap */}
+      {analytics && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Move Flow */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Move Flow Between Buildings</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {analytics.moveFlow.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={analytics.moveFlow} layout="vertical">
+                    <XAxis type="number" />
+                    <YAxis
+                      type="category"
+                      dataKey={(d: { from: string; to: string }) => `${d.from} → ${d.to}`}
+                      width={160}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <Tooltip />
+                    <Bar dataKey="count" name="Moves" radius={[0, 4, 4, 0]}>
+                      {analytics.moveFlow.map((_, i) => (
+                        <Cell key={i} fill={FLOW_COLORS[i % FLOW_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No flow data</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Floor Heatmap */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Floor Activity Heatmap</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {analytics.floorHeatmap.length > 0 ? (
+                <div className="space-y-1.5 max-h-[250px] overflow-y-auto">
+                  {analytics.floorHeatmap.map((f) => {
+                    const net = f.destCount - f.originCount
+                    const maxCount = Math.max(
+                      ...analytics.floorHeatmap.map((h) => Math.max(h.originCount, h.destCount)),
+                      1
+                    )
+                    return (
+                      <div key={f.floor} className="flex items-center gap-2 text-xs">
+                        <span className="w-28 truncate font-mono text-muted-foreground">{f.floor}</span>
+                        <div className="flex-1 flex items-center gap-1">
+                          <div
+                            className="h-4 rounded-sm bg-red-400"
+                            style={{ width: `${(f.originCount / maxCount) * 100}%`, minWidth: f.originCount > 0 ? 4 : 0 }}
+                            title={`Leaving: ${f.originCount}`}
+                          />
+                          <div
+                            className={cn(
+                              "h-4 rounded-sm",
+                              f.floor === "STORAGE" ? "bg-blue-400" : "bg-green-400"
+                            )}
+                            style={{ width: `${(f.destCount / maxCount) * 100}%`, minWidth: f.destCount > 0 ? 4 : 0 }}
+                            title={`Arriving: ${f.destCount}`}
+                          />
+                        </div>
+                        <span className={cn(
+                          "w-10 text-right font-medium",
+                          net > 0 ? "text-green-600" : net < 0 ? "text-red-600" : "text-gray-400"
+                        )}>
+                          {net > 0 ? "+" : ""}{net}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  <div className="flex items-center gap-4 mt-3 pt-2 border-t text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-red-400" /> Leaving</div>
+                    <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-green-400" /> Arriving</div>
+                    <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-blue-400" /> Storage</div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No floor data</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Moves Table */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Moves ({filteredMoves.length})</CardTitle>
+            {selectedIds.size > 0 && (
+              <Button
+                size="sm"
+                onClick={handleBulkComplete}
+                disabled={bulkUpdating}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle2 className="h-4 w-4 mr-1" />
+                Mark Complete ({selectedIds.size})
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex rounded-lg border overflow-hidden">
+              {STATUS_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => { setStatusFilter(tab.key); setSelectedIds(new Set()) }}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium transition-colors",
+                    statusFilter === tab.key
+                      ? "bg-[#ea580c] text-white"
+                      : "text-muted-foreground hover:bg-gray-50"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or employee #"
+                className="pl-9 h-8"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="pb-2 pr-2">
+                    <input
+                      type="checkbox"
+                      checked={filteredMoves.length > 0 && selectedIds.size === filteredMoves.length}
+                      onChange={toggleSelectAll}
+                      className="rounded"
+                    />
+                  </th>
+                  <th className="pb-2 font-medium">Name</th>
+                  <th className="pb-2 font-medium">Employee #</th>
+                  <th className="pb-2 font-medium">From</th>
+                  <th className="pb-2 font-medium">To</th>
+                  <th className="pb-2 font-medium text-right">Items</th>
+                  <th className="pb-2 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredMoves.map((m) => (
+                  <tr key={m.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <td className="py-2.5 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(m.id)}
+                        onChange={() => toggleSelect(m.id)}
+                        className="rounded"
+                      />
+                    </td>
+                    <td className="py-2.5 font-medium">
+                      {m.firstName} {m.lastName}
+                    </td>
+                    <td className="py-2.5 text-muted-foreground font-mono text-xs">{m.employeeNumber}</td>
+                    <td className="py-2.5">
+                      <span className="font-medium">{m.originLocation}</span>
+                      <span className="text-muted-foreground"> / {m.originFloor} / {m.originRoom}</span>
+                    </td>
+                    <td className="py-2.5">
+                      {m.isStorage ? (
+                        <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                          STORAGE
+                        </Badge>
+                      ) : (
+                        <>
+                          <span className="font-medium">{m.destLocation}</span>
+                          <span className="text-muted-foreground"> / {m.destFloor} / {m.destRoom}</span>
+                        </>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-right">{m.workItemCount}</td>
+                    <td className="py-2.5">
+                      <Badge className={cn("text-xs", MOVE_STATUS_COLORS[m.status] || "bg-gray-100 text-gray-700")}>
+                        {m.status.replace(/_/g, " ")}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+                {filteredMoves.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                      No moves match your filters
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* RFID Verification Panel */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">RFID Verification</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded bg-green-50">
+                  <Radio className="h-4 w-4 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold">{importData.summary.rfidVerifiedCount}</p>
+                  <p className="text-xs text-muted-foreground">RFID Verified</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded bg-gray-100">
+                  <Radio className="h-4 w-4 text-gray-400" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold">{importData.summary.rfidUnverifiedCount}</p>
+                  <p className="text-xs text-muted-foreground">Not Verified</p>
+                </div>
+              </div>
+              {importData.totalPersonMoves > 0 && (
+                <div className="ml-4">
+                  <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 rounded-full"
+                      style={{
+                        width: `${(importData.summary.rfidVerifiedCount / importData.totalPersonMoves) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {Math.round((importData.summary.rfidVerifiedCount / importData.totalPersonMoves) * 100)}% verified
+                  </p>
+                </div>
+              )}
+            </div>
+            <Button variant="outline" disabled>
+              <ScanLine className="h-4 w-4 mr-2" />
+              Start RFID Scan Session
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
