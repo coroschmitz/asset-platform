@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import { ColumnFilter } from "./ColumnFilter"
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
 
 interface Asset {
   id: string
@@ -236,7 +237,9 @@ export function AssetGrid({
                   </td>
                 )}
                 <td className="px-2 py-1.5 text-center">{asset.quantity}</td>
-                <td className="px-2 py-1.5 font-mono font-medium text-primary">{asset.tagNumber}</td>
+                <td className="px-2 py-1.5 font-mono font-medium text-primary">
+                  <Link href={`/inventory/${asset.id}`} className="hover:underline">{asset.tagNumber}</Link>
+                </td>
                 <td className="px-2 py-1.5 max-w-[200px] truncate" title={asset.description}>{asset.description}</td>
                 <td className="px-2 py-1.5">{asset.type}</td>
                 <td className="px-2 py-1.5">{asset.category}</td>

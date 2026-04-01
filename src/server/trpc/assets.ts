@@ -66,14 +66,36 @@ export const assetsRouter = router({
     }),
 
   getById: publicProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
-    return ctx.prisma.asset.findUnique({
+    const asset = await ctx.prisma.asset.findUnique({
       where: { id: input.id },
       include: {
         location: { include: { partner: true } },
         photos: true,
         client: { select: { name: true } },
+        workOrderItems: {
+          include: {
+            workOrder: {
+              select: { id: true, orderNumber: true, status: true, requestDate: true, requestType: true },
+            },
+          },
+        },
+        dispositions: {
+          orderBy: { createdAt: "desc" },
+        },
       },
     })
+    if (!asset) return null
+
+    const now = new Date()
+    const refDate = asset.lastMovedDate || asset.dateReceived || asset.createdAt
+    const monthsDormant = Math.floor((now.getTime() - refDate.getTime()) / (1000 * 60 * 60 * 24 * 30))
+    const totalStorageCostIncurred = monthsDormant * (asset.monthlyStorageCost || 0)
+
+    return {
+      ...asset,
+      monthsDormant,
+      totalStorageCostIncurred,
+    }
   }),
 
   getFilterOptions: publicProcedure
