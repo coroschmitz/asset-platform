@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { format } from "date-fns"
+import { format, formatDistanceToNow, differenceInMinutes } from "date-fns"
 import {
   ArrowLeft,
   Mail,
@@ -19,6 +19,10 @@ import {
   MapPin,
   FileText,
   Package,
+  AlertTriangle,
+  CheckCircle2,
+  Navigation,
+  DollarSign,
 } from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
@@ -282,6 +286,93 @@ export default function WorkOrderDetailPage({ params }: { params: Promise<{ id: 
             </CardContent>
           </Card>
 
+          {/* SLA Compliance */}
+          <Card>
+            <CardHeader className="py-3 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <AlertTriangle className="h-3.5 w-3.5" /> SLA Compliance
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <SlaRow
+                label="Response"
+                deadline={wo.slaResponseDue}
+                completedAt={wo.respondedAt}
+                orderStatus={wo.status}
+              />
+              <SlaRow
+                label="Completion"
+                deadline={wo.slaCompletionDue}
+                completedAt={wo.completedDate}
+                orderStatus={wo.status}
+              />
+              {wo.checkedInAt && (
+                <div className="pt-2 border-t">
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <Navigation className="h-3 w-3 text-green-600" />
+                    <span className="font-medium">Checked In</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {format(new Date(wo.checkedInAt), "MMM d, yyyy h:mm a")}
+                  </div>
+                  {wo.checkedInLat && wo.checkedInLng && (
+                    <div className="text-[10px] text-muted-foreground">
+                      GPS: {Number(wo.checkedInLat).toFixed(4)}, {Number(wo.checkedInLng).toFixed(4)}
+                    </div>
+                  )}
+                </div>
+              )}
+              {wo.checkedOutAt && (
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    <CheckCircle2 className="h-3 w-3 text-blue-600" />
+                    <span className="font-medium">Checked Out</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {format(new Date(wo.checkedOutAt), "MMM d, yyyy h:mm a")}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Cost Summary */}
+          {(wo.totalCost || wo.actualHours || wo.nteAmount) && (
+            <Card>
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <DollarSign className="h-3.5 w-3.5" /> Cost Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {wo.actualHours != null && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground text-xs">Hours</span>
+                    <span className="text-xs font-medium">{wo.actualHours}h @ ${wo.laborRate || 85}/hr</span>
+                  </div>
+                )}
+                {wo.materialCost != null && wo.materialCost > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground text-xs">Materials</span>
+                    <span className="text-xs font-medium">${wo.materialCost.toLocaleString()}</span>
+                  </div>
+                )}
+                {wo.totalCost != null && (
+                  <div className="flex justify-between border-t pt-1">
+                    <span className="text-muted-foreground text-xs font-medium">Total</span>
+                    <span className="text-xs font-bold">${wo.totalCost.toLocaleString()}</span>
+                  </div>
+                )}
+                {wo.nteAmount != null && (
+                  <div className={cn("flex justify-between", wo.totalCost && wo.totalCost > wo.nteAmount ? "text-red-600" : "")}>
+                    <span className="text-xs">NTE</span>
+                    <span className="text-xs font-medium">${wo.nteAmount.toLocaleString()}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Dates */}
           <Card>
             <CardHeader className="py-3 px-4">
@@ -354,6 +445,65 @@ function Field({ label, value }: { label: string; value: string }) {
     <div>
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="font-medium">{value}</div>
+    </div>
+  )
+}
+
+function SlaRow({ label, deadline, completedAt, orderStatus }: {
+  label: string
+  deadline: Date | string | null | undefined
+  completedAt: Date | string | null | undefined
+  orderStatus: string
+}) {
+  if (!deadline) return (
+    <div className="flex justify-between items-center">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground">Not set</span>
+    </div>
+  )
+
+  const due = new Date(deadline)
+  const now = new Date()
+  const met = !!completedAt && new Date(completedAt) <= due
+
+  if (completedAt) {
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <div className="flex items-center gap-1">
+          {met ? (
+            <><CheckCircle2 className="h-3 w-3 text-green-600" /><span className="text-xs text-green-700 font-medium">Met</span></>
+          ) : (
+            <><AlertTriangle className="h-3 w-3 text-red-600" /><span className="text-xs text-red-600 font-medium">Breached</span></>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (orderStatus === "CANCELLED" || orderStatus === "DRAFT") {
+    return (
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">—</span>
+      </div>
+    )
+  }
+
+  const minsLeft = differenceInMinutes(due, now)
+
+  return (
+    <div className="flex justify-between items-center">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-1">
+        {minsLeft < 0 ? (
+          <><AlertTriangle className="h-3 w-3 text-red-600" /><span className="text-[10px] text-red-600 font-semibold">OVERDUE {formatDistanceToNow(due)}</span></>
+        ) : minsLeft < 120 ? (
+          <><Clock className="h-3 w-3 text-orange-500" /><span className="text-[10px] text-orange-600 font-medium">{formatDistanceToNow(due, { addSuffix: true })}</span></>
+        ) : (
+          <><Clock className="h-3 w-3 text-green-500" /><span className="text-[10px] text-green-700">{formatDistanceToNow(due, { addSuffix: true })}</span></>
+        )}
+      </div>
     </div>
   )
 }

@@ -17,6 +17,10 @@ import {
   Cable,
   DollarSign,
   Leaf,
+  Radio,
+  FolderKanban,
+  ScanBarcode,
+  Sparkles,
 } from "lucide-react"
 import { useState } from "react"
 import { useClientContext } from "@/lib/client-context"
@@ -25,12 +29,16 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Inventory", href: "/inventory", icon: Package },
   { name: "Work Orders", href: "/orders", icon: ClipboardList },
+  { name: "CoroTrak", href: "/corotrak", icon: ScanBarcode },
+  { name: "RFID", href: "/rfid", icon: Radio },
+  { name: "Projects", href: "/projects", icon: FolderKanban },
   { name: "Locations", href: "/locations", icon: MapPin },
   { name: "Partners", href: "/partners", icon: Users },
   { name: "Integrations", href: "/integrations", icon: Cable },
-  { name: "Sustainability", href: "/sustainability", icon: Leaf },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Sustainability", href: "/sustainability", icon: Leaf },
   { name: "Billing", href: "/billing", icon: DollarSign },
+  { name: "AI Assistant", href: "/ai", icon: Sparkles },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 

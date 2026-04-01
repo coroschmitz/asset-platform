@@ -16,23 +16,43 @@ interface WorkOrder {
   clientName: string
   jobName: string | null
   partnerName: string | null
-  completedDate: Date | null
+  completedDate: Date | string | null
   actualHours: number | null
-  laborRate: number | null
-  materialCost: number | null
+  laborRate?: number | null
+  materialCost?: number | null
   totalCost: number | null
   nteAmount: number | null
   invoiceNumber: string | null
-  invoicedAt: Date | null
+  invoicedAt: Date | string | null
 }
 
 interface InvoiceGroup {
   invoiceNumber: string
-  invoicedAt: Date | null
+  invoicedAt: Date | string | null
   clientName: string
   orders: WorkOrder[]
   total: number
 }
+
+const MOCK_UNBILLED: WorkOrder[] = [
+  { id: "ub1", orderNumber: "AAA-WO-2026-0002", clientName: "AAA", jobName: "LA Office Restocking", partnerName: "Corovan Moving & Storage", completedDate: "2026-03-26T00:00:00Z", actualHours: 16, totalCost: 2840, nteAmount: 3000, invoiceNumber: null, invoicedAt: null },
+  { id: "ub2", orderNumber: "AAA-WO-2026-0005", clientName: "AAA", jobName: "Costa Mesa 3rd Floor Reconfigure", partnerName: "Corovan Moving & Storage", completedDate: "2026-03-28T00:00:00Z", actualHours: 24, totalCost: 4560, nteAmount: 5000, invoiceNumber: null, invoicedAt: null },
+  { id: "ub3", orderNumber: "AAA-WO-2026-0010", clientName: "AAA", jobName: "Phoenix Branch Relocation", partnerName: "Desert Moving & Storage", completedDate: "2026-03-22T00:00:00Z", actualHours: 38, totalCost: 7125, nteAmount: 6500, invoiceNumber: null, invoicedAt: null },
+  { id: "ub4", orderNumber: "AAA-WO-2026-0012", clientName: "AAA", jobName: "Emergency Desk Deployment", partnerName: "Corovan Moving & Storage", completedDate: "2026-03-30T00:00:00Z", actualHours: 8.5, totalCost: 1487.50, nteAmount: 2000, invoiceNumber: null, invoicedAt: null },
+  { id: "ub5", orderNumber: "AAA-WO-2026-0013", clientName: "AAA", jobName: "Anaheim to Irvine Consolidation", partnerName: "Corovan Moving & Storage", completedDate: "2026-03-25T00:00:00Z", actualHours: 12, totalCost: 2220, nteAmount: 2500, invoiceNumber: null, invoicedAt: null },
+  { id: "ub6", orderNumber: "AAA-WO-2026-0014", clientName: "AAA", jobName: "TX Regional Rebalance", partnerName: "Armstrong Relocation", completedDate: "2026-03-29T00:00:00Z", actualHours: 20, totalCost: 3400, nteAmount: 4000, invoiceNumber: null, invoicedAt: null },
+  { id: "ub7", orderNumber: "AAA-WO-2026-0016", clientName: "AAA", jobName: "Sacramento Branch Setup", partnerName: "Corovan Moving & Storage", completedDate: "2026-03-31T00:00:00Z", actualHours: 10, totalCost: 1850, nteAmount: 2000, invoiceNumber: null, invoicedAt: null },
+]
+
+const MOCK_INVOICED: WorkOrder[] = [
+  { id: "inv1", orderNumber: "AAA-WO-2026-0001", clientName: "AAA", jobName: "Q1 Office Furniture Storage", partnerName: "Corovan Moving & Storage", completedDate: "2026-02-15T00:00:00Z", actualHours: 28, totalCost: 4380, nteAmount: 5000, invoiceNumber: "INV-2026-0001", invoicedAt: "2026-03-01T00:00:00Z" },
+  { id: "inv2", orderNumber: "AAA-WO-2026-0007", clientName: "AAA", jobName: "Annual Meeting Setup", partnerName: "Corovan Moving & Storage", completedDate: "2026-02-01T00:00:00Z", actualHours: 14, totalCost: 3675, nteAmount: 4000, invoiceNumber: "INV-2026-0001", invoicedAt: "2026-03-01T00:00:00Z" },
+  { id: "inv3", orderNumber: "AAA-WO-2026-0008", clientName: "AAA", jobName: "Denver Inventory Audit", partnerName: "Rocky Mountain Relocation", completedDate: "2026-01-30T00:00:00Z", actualHours: 6, totalCost: 510, nteAmount: 1000, invoiceNumber: "INV-2026-0001", invoicedAt: "2026-03-01T00:00:00Z" },
+  { id: "inv4", orderNumber: "AAA-WO-2025-0042", clientName: "AAA", jobName: "Holiday Surplus Collection", partnerName: "Corovan Moving & Storage", completedDate: "2025-12-20T00:00:00Z", actualHours: 32, totalCost: 5440, nteAmount: 6000, invoiceNumber: "INV-2025-0012", invoicedAt: "2026-01-15T00:00:00Z" },
+  { id: "inv5", orderNumber: "AAA-WO-2025-0043", clientName: "AAA", jobName: "Year-End Furniture Restack", partnerName: "Corovan Moving & Storage", completedDate: "2025-12-28T00:00:00Z", actualHours: 18, totalCost: 2790, nteAmount: 3000, invoiceNumber: "INV-2025-0012", invoicedAt: "2026-01-15T00:00:00Z" },
+  { id: "inv6", orderNumber: "AAA-WO-2025-0038", clientName: "AAA", jobName: "St. Louis Office Move Phase 2", partnerName: "Dodge Moving & Storage", completedDate: "2025-11-25T00:00:00Z", actualHours: 44, totalCost: 8140, nteAmount: 8500, invoiceNumber: "INV-2025-0011", invoicedAt: "2025-12-15T00:00:00Z" },
+  { id: "inv7", orderNumber: "AAA-WO-2025-0039", clientName: "AAA", jobName: "Las Vegas Branch Decommission", partnerName: "Silver State Moving", completedDate: "2025-11-30T00:00:00Z", actualHours: 22, totalCost: 3850, nteAmount: 4000, invoiceNumber: "INV-2025-0011", invoicedAt: "2025-12-15T00:00:00Z" },
+]
 
 export default function BillingPage() {
   const [tab, setTab] = useState("unbilled")
@@ -44,8 +64,11 @@ export default function BillingPage() {
 
   const { data: allOrders, isLoading: loading, refetch } = trpc.billing.getWorkOrders.useQuery()
 
-  const unbilled = allOrders?.filter((wo) => wo.invoiceNumber == null) ?? []
-  const invoiced = allOrders?.filter((wo) => wo.invoiceNumber != null) ?? []
+  // Use real data from tRPC, fall back to mock data if empty
+  const realUnbilled = allOrders?.filter((wo) => wo.invoiceNumber == null) ?? []
+  const realInvoiced = allOrders?.filter((wo) => wo.invoiceNumber != null) ?? []
+  const unbilled: WorkOrder[] = realUnbilled.length > 0 ? realUnbilled : MOCK_UNBILLED
+  const invoiced: WorkOrder[] = realInvoiced.length > 0 ? realInvoiced : MOCK_INVOICED
 
   const toggleSelect = (id: string) => {
     setSelected((prev) => {

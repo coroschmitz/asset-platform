@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { Plus, Search, ChevronDown, ChevronRight } from "lucide-react"
+import { Plus, Search, ChevronDown, ChevronRight, AlertTriangle, Clock } from "lucide-react"
 import Link from "next/link"
-import { format } from "date-fns"
+import { format, formatDistanceToNow, differenceInMinutes } from "date-fns"
 
 const STATUS_TABS = [
   { key: "ALL", label: "All" },
@@ -118,8 +118,8 @@ export default function OrdersPage() {
               <th className="px-3 py-2 font-medium">Partner</th>
               <th className="px-3 py-2 font-medium">Items</th>
               <th className="px-3 py-2 font-medium">Priority</th>
+              <th className="px-3 py-2 font-medium">SLA</th>
               <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium">Requested By</th>
             </tr>
           </thead>
           <tbody>
@@ -169,15 +169,17 @@ export default function OrdersPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
+                    <SlaCell order={order} />
+                  </td>
+                  <td className="px-3 py-2.5">
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", STATUS_COLORS[order.status])}>
                       {order.status.replace(/_/g, " ")}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5 text-xs">{order.requestedBy}</td>
                 </tr>
                 {expandedId === order.id && (
                   <tr key={`${order.id}-detail`} className="bg-muted/20">
-                    <td colSpan={10} className="px-6 py-3">
+                    <td colSpan={9} className="px-6 py-3">
                       <ExpandedOrderRow orderId={order.id} />
                     </td>
                   </tr>
@@ -198,6 +200,47 @@ export default function OrdersPage() {
           <Button variant="outline" size="sm" disabled={page >= (orders.data?.totalPages || 1)} onClick={() => setPage(page + 1)}>Next</Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function SlaCell({ order }: { order: { status: string; slaResponseDue?: string | Date | null; slaCompletionDue?: string | Date | null; respondedAt?: string | Date | null } }) {
+  if (order.status === "COMPLETED" || order.status === "CANCELLED" || order.status === "DRAFT") {
+    return <span className="text-[10px] text-muted-foreground">—</span>
+  }
+
+  const now = new Date()
+  const responseDue = order.slaResponseDue ? new Date(order.slaResponseDue) : null
+  const completionDue = order.slaCompletionDue ? new Date(order.slaCompletionDue) : null
+  const responded = !!order.respondedAt
+
+  // Determine which SLA to show
+  const activeDue = !responded && responseDue ? responseDue : completionDue
+  if (!activeDue) return <span className="text-[10px] text-muted-foreground">—</span>
+
+  const minsLeft = differenceInMinutes(activeDue, now)
+  const label = !responded ? "Response" : "Completion"
+
+  if (minsLeft < 0) {
+    return (
+      <div className="flex items-center gap-1">
+        <AlertTriangle className="h-3 w-3 text-red-600" />
+        <span className="text-[10px] font-semibold text-red-600">OVERDUE {formatDistanceToNow(activeDue)}</span>
+      </div>
+    )
+  }
+  if (minsLeft < 120) {
+    return (
+      <div className="flex items-center gap-1">
+        <Clock className="h-3 w-3 text-orange-500" />
+        <span className="text-[10px] font-medium text-orange-600">{label} {formatDistanceToNow(activeDue, { addSuffix: true })}</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <Clock className="h-3 w-3 text-green-500" />
+      <span className="text-[10px] text-green-700">{label} {formatDistanceToNow(activeDue, { addSuffix: true })}</span>
     </div>
   )
 }
