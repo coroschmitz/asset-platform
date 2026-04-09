@@ -49,7 +49,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 export default function DashboardPage() {
   const { clientId } = useClientContext()
-  const input = clientId ? { clientId } : undefined
+  const input = clientId ? { clientId } : {}
   const stats = trpc.dashboard.getStats.useQuery(input)
   const clientCtx = trpc.dashboard.getClientContext.useQuery(input)
   const recentOrders = trpc.dashboard.getRecentWorkOrders.useQuery(input)
